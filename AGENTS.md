@@ -22,6 +22,30 @@ changing `src/`, run `npm run build:js`; new agent sessions pick it up. A runnin
 session keeps `ocu-win.exe` open, so `npm run build:native` cannot replace it until
 those sessions end (or point `OCU_WINDOWS_HELPER` at another build).
 
+## Packaging and releases
+
+The repository is the plugin: GitHub installs in every client copy it as is.
+
+- **Shipped files:** `dist/cli.mjs` (all JS dependencies bundled) and
+  `native/windows/bin/ocu-win.exe` are committed. Rebuild whichever one your change
+  affects, then run `npm run validate` before committing. It fails when an artifact is
+  older than its sources or when versions disagree.
+- **Manifests:**
+  - portable `plugin.json` + `mcp.json` + `skills/` (Codex reads these);
+  - `.claude-plugin/plugin.json` (inline MCP server) and `.claude-plugin/marketplace.json`;
+  - `.agents/plugins/marketplace.json` (Codex);
+  - `index.js` → `opencode/index.mjs` (OpenCode v2).
+- **One version** in `package.json`, both `plugin.json` files and `VERSION` in
+  `src/server.ts`.
+- **No script named `build` or `prepare`:** npm would prepare Git installs and fail.
+- **Verify installs** in isolated profiles:
+  - `CLAUDE_CONFIG_DIR`;
+  - `CODEX_HOME`;
+  - OpenCode `XDG_*` folders plus `opencode service set port <port>`.
+
+  Then run `node scripts/check-installed.mjs <installed dist/cli.mjs>`, and record the
+  results in `docs/compatibility.md`.
+
 Write TypeScript as erasable syntax only (no enums, namespaces or parameter
 properties), because Node runs the sources directly. Use `.ts` extensions in imports.
 
