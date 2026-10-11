@@ -1,4 +1,4 @@
-import { type Config, cliCommand, configPath, updateApprovedApps } from "./config.ts";
+import { type Config, configPath, updateApprovedApps } from "./config.ts";
 import { ToolError } from "./errors.ts";
 import type { WindowInfo } from "./protocol.ts";
 
@@ -130,7 +130,7 @@ export class Approvals {
     throw new ToolError(
       "app_not_approved",
       `open-cu needs the user's permission to use ${app.label}. Ask the user to approve it by running ` +
-        `\`${cliCommand()} approve ${app.exe}\` (or adding "${app.exe}" to approvedApps in ${configPath()}), then retry.`,
+        `\`open-cu approve ${app.exe}\` (or adding "${app.exe}" to approvedApps in ${configPath()}), then retry.`,
     );
   }
 }

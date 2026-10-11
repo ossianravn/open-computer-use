@@ -59,12 +59,6 @@ export const DEFAULT_CONFIG: Config = {
 /** Where the server records the last connected MCP client (name, version, capabilities; no content). */
 export const LAST_CLIENT_FILE = join(tmpdir(), "open-cu", "last-client.json");
 
-/** How to run this CLI from a shell: the script itself when known, else the installed command. */
-export function cliCommand(): string {
-  const script = process.argv[1];
-  return script && /[\\/]cli\.(mjs|ts)$/.test(script) ? `node "${script}"` : "open-cu";
-}
-
 export function configPath(): string {
   return process.env.OCU_CONFIG ?? join(homedir(), ".open-cu", "config.json");
 }

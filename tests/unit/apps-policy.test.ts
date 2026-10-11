@@ -70,5 +70,5 @@ test("approval asks the user once per session and honours a denial", async () =>
   await assert.rejects(denying.ensure(notepad), /declined/);
 
   const silent = new Approvals(structuredClone(DEFAULT_CONFIG), async () => undefined);
-  await assert.rejects(silent.ensure(notepad), /approve notepad.exe/);
+  await assert.rejects(silent.ensure(notepad), /`open-cu approve notepad.exe`/);
 });
