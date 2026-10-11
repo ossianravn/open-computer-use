@@ -96,8 +96,8 @@ fn ago(at: u64) -> Option<u64> {
     (at != 0).then(|| now_ms().saturating_sub(at))
 }
 
-/// Fail when the user pressed Esc recently, or is using the keyboard or mouse right now.
-pub fn check() -> Result<(), RpcError> {
+/// Fail when the user pressed Esc recently. Applies to every state-changing call.
+pub fn check_stop() -> Result<(), RpcError> {
     let esc = LAST_ESC.load(Ordering::Relaxed);
     if esc > CLEARED_AT.load(Ordering::Relaxed) && ago(esc).is_some_and(|ms| ms < stop_latch_ms()) {
         return Err(RpcError::new(
@@ -105,6 +105,14 @@ pub fn check() -> Result<(), RpcError> {
             "The user pressed Esc to stop computer use. Stop acting and ask the user how to continue.",
         ));
     }
+    Ok(())
+}
+
+/// Also fail while the user is using the keyboard or mouse. Applies to physical input,
+/// which takes the foreground and the pointer; accessibility actions run in the
+/// background and do not need it.
+pub fn check() -> Result<(), RpcError> {
+    check_stop()?;
     if ago(LAST_INPUT.load(Ordering::Relaxed)).is_some_and(|ms| ms < user_active_ms()) {
         return Err(RpcError::new(
             "user_active",

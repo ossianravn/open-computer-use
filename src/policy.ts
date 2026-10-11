@@ -29,6 +29,12 @@ const SECURITY_AND_SYSTEM = [
   "csfalconcontainer.exe", "sentinelui.exe", "kavtray.exe", "avp.exe", "sophosui.exe",
 ];
 
+/** Programs launch_app never starts: shells and script hosts run arbitrary commands. */
+export const LAUNCH_DENIED = [
+  "cmd.exe", "powershell.exe", "pwsh.exe", "powershell_ise.exe", "bash.exe", "wsl.exe", "wscript.exe",
+  "cscript.exe", "mshta.exe", "rundll32.exe", "regsvr32.exe", "msiexec.exe", "python.exe", "node.exe",
+];
+
 /** AI agent hosts: driving them could let an agent approve its own requests. */
 const AGENT_APPS = ["claude.exe", "chatgpt.exe", "codex.exe"];
 

@@ -78,6 +78,7 @@ Usage:
   open-computer-use state <app> [--window <id>] [--query <words>] [--screenshot <file.jpg>] [--offscreen]
   open-computer-use find <app> <description...>
   open-computer-use call <tool> '<json args>'   Run one tool, e.g. call click '{"app":"notepad","target":"File menu"}'
+  open-computer-use call <tool> -               Same, reading the JSON arguments from stdin
   open-computer-use approve <app.exe>        Always allow an app
   open-computer-use revoke <app.exe>         Remove an app from the allow list
   open-computer-use config                   Show the config file path and contents
@@ -146,7 +147,9 @@ async function main(): Promise<void> {
         break;
       case "call": {
         const [tool, json] = rest;
-        const args = json ? JSON.parse(json) : {};
+        // "-" reads the arguments from stdin, which avoids shell quoting of JSON.
+        const raw = json === "-" ? readFileSync(0, "utf8") : json;
+        const args = raw ? JSON.parse(raw) : {};
         const methods: Record<string, (args: never) => Promise<ToolOutput>> = {
           list_apps: (a) => computer.listApps(a),
           launch_app: (a) => computer.launchApp(a),

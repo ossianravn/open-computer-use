@@ -6,7 +6,7 @@ import type { Config } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
 import type { Platform } from "./platform.ts";
-import { Approvals, type AskUser, appIdentity, assertKeyAllowed, assertNotBlocked, blockReason } from "./policy.ts";
+import { Approvals, type AskUser, LAUNCH_DENIED, appIdentity, assertKeyAllowed, assertNotBlocked, blockReason } from "./policy.ts";
 import type { ElementActionResult, HelperMethods, WindowInfo } from "./protocol.ts";
 import { IdentityMap, type StateNode, WindowState } from "./state.ts";
 import { type Purpose, describeCandidate } from "./targets.ts";
@@ -363,6 +363,11 @@ export class Computer {
       const block = blockReason(first, this.config);
       if (block) tags.push("blocked");
       else if (this.approvals.isApproved(identity)) tags.push("approved");
+      if (block) {
+        // Window titles of blocked apps (password vaults, terminals) stay private.
+        lines.push(`- ${displayName(first)} — ${identity.exe} [blocked]`);
+        continue;
+      }
       const dialogs = all.filter((w) => w.pid === first.pid && w.owner && windows.some((main) => main.hwnd === w.owner) && w.title);
       const listed = [...windows, ...dialogs]
         .map((w) => `${w.hwnd} "${clean(w.title, 70)}"${w.owner ? " (dialog)" : ""}${w.minimized ? " (minimized)" : ""}${w.foreground ? " (foreground)" : ""}`)
@@ -396,6 +401,9 @@ export class Computer {
       rect: { x: 0, y: 0, width: 0, height: 0 }, minimized: false, maximized: false, foreground: false, enabled: true, owner: null, appWindow: true, dpi: 96,
     };
     assertNotBlocked(fake, this.config);
+    if (LAUNCH_DENIED.includes(program.toLowerCase())) {
+      throw new ToolError("app_blocked", `launch_app does not start shells or script hosts (${program}). Use your own shell tool.`);
+    }
     const before = new Set((await this.helper.call("listWindows", { includeAll: true })).map((w) => w.hwnd));
     if (loose.length === 1 || matches.length) await this.platform.launch(loose[0]!);
     else if (loose.length > 1) {

@@ -688,7 +688,7 @@ impl Session {
     pub fn element_action(&mut self, params: Value) -> Result<Value, RpcError> {
         let params: ElementParams = parse(params)?;
         ensure_window(params.hwnd)?;
-        crate::guard::check()?;
+        crate::guard::check_stop()?;
         let element = SendElement(self.element(params.hwnd, params.element_id, params.snapshot_id)?.clone());
         // Some providers only return from Invoke once a modal dialog it opened closes.
         // Run the action on a worker so the helper stays responsive, and report it as

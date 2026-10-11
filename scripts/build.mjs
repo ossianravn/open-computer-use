@@ -10,7 +10,7 @@ await build({
   format: "esm",
   target: "node22",
   banner: {
-    js: "#!/usr/bin/env node\nimport { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
   },
   logLevel: "info",
 });
