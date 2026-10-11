@@ -10,10 +10,13 @@ const run = promisify(execFile);
 
 export type InstalledApp = { name: string; id: string };
 
+/** What the server needs from a helper connection. */
+export type Helper = Pick<HelperClient, "call" | "close">;
+
 /** OS-specific pieces that live outside the helper protocol. */
 export interface Platform {
   readonly name: string;
-  readonly helper: HelperClient;
+  readonly helper: Helper;
   /** The helper executable in use. */
   readonly helperPath: string;
   installedApps(): Promise<InstalledApp[]>;
@@ -91,10 +94,45 @@ class WindowsPlatform implements Platform {
   }
 }
 
+/**
+ * Stands in where no helper can run (another OS, or a missing build). The server still
+ * starts, so clients list its tools; every call explains the problem instead.
+ */
+class UnavailablePlatform implements Platform {
+  readonly helperPath = "";
+  readonly helper: Helper;
+  readonly name: string;
+
+  constructor(name: string, problem: ToolError) {
+    this.name = name;
+    this.helper = { call: () => Promise.reject(problem), close: () => undefined };
+  }
+
+  installedApps(): Promise<InstalledApp[]> {
+    return this.helper.call("ping", {}) as never;
+  }
+
+  launch(): Promise<void> {
+    return this.helper.call("ping", {}) as never;
+  }
+
+  close(): void {}
+}
+
 export function createPlatform(): Platform {
-  if (process.platform === "win32") return new WindowsPlatform();
-  throw new ToolError(
-    "unsupported_platform",
-    `open-cu has no helper for ${process.platform} yet. The helper protocol is documented in docs/architecture.md.`,
-  );
+  if (process.platform !== "win32") {
+    return new UnavailablePlatform(
+      process.platform,
+      new ToolError(
+        "unsupported_platform",
+        `open-cu runs on Windows 10/11 only so far; there is no helper for ${process.platform} yet. Tell the user this tool cannot operate apps on this computer.`,
+      ),
+    );
+  }
+  try {
+    return new WindowsPlatform();
+  } catch (error) {
+    if (error instanceof ToolError) return new UnavailablePlatform("windows", error);
+    throw error;
+  }
 }

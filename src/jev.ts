@@ -47,15 +47,21 @@ export class Jev {
     this.settings = settings;
   }
 
-  private credentials(): { apiKey?: string; model?: string } {
-    const fromEnv = { apiKey: process.env.TYPESAFE_API_KEY?.trim(), model: process.env.TYPESAFE_MODEL?.trim() };
-    if (fromEnv.apiKey) return fromEnv;
+  /** The key and where it came from (never the key in messages). First source wins. */
+  credentials(): { apiKey?: string; model?: string; source?: string } {
+    const fromEnv = process.env.TYPESAFE_API_KEY?.trim();
+    if (fromEnv) return { apiKey: fromEnv, model: process.env.TYPESAFE_MODEL?.trim(), source: "TYPESAFE_API_KEY environment variable" };
     // Reuse a key the user already keeps for other tools, e.g. the JEV 9000 plugin.
-    for (const file of [this.settings.envFile, process.env.OCU_ENV_FILE, process.env.JEV_9000_ENV_FILE]) {
+    const files: [string | undefined, string][] = [
+      [this.settings.envFile, "jev.envFile"],
+      [process.env.OCU_ENV_FILE, "OCU_ENV_FILE"],
+      [process.env.JEV_9000_ENV_FILE, "JEV_9000_ENV_FILE"],
+    ];
+    for (const [file, label] of files) {
       if (!file) continue;
       try {
         const values = readEnvFile(file);
-        if (values.TYPESAFE_API_KEY) return { apiKey: values.TYPESAFE_API_KEY, model: values.TYPESAFE_MODEL };
+        if (values.TYPESAFE_API_KEY) return { apiKey: values.TYPESAFE_API_KEY, model: values.TYPESAFE_MODEL, source: `${label} (${file})` };
       } catch {
         // Try the next source.
       }
@@ -63,8 +69,21 @@ export class Jev {
     return {};
   }
 
+  /** A minimal request that proves the key and model work. */
+  async verify(): Promise<{ model: string; ms: number }> {
+    const client = this.get();
+    if (!client) throw new Error(this.status().reason ?? "Jev is unavailable.");
+    const started = performance.now();
+    const response = await client.systemOne({
+      state: "open-cu setup check",
+      questions: { ok: { type: "noul", instructions: "Is this text a setup check?" } },
+      ...(this.settings.model ? { model: this.settings.model } : {}),
+    });
+    return { model: response.model, ms: Math.round(performance.now() - started) };
+  }
+
   status(): JevStatus {
-    if (!this.settings.enabled) return { enabled: false, ready: false, reason: "Jev is off (enable with --jev, OCU_JEV=1 or jev.enabled in config)." };
+    if (!this.settings.enabled) return { enabled: false, ready: false, reason: "Jev is off (turn it on with `open-cu jev setup`, --jev or OCU_JEV=1)." };
     const client = this.get();
     return client
       ? { enabled: true, ready: true, model: this.settings.model ?? client.defaultModel }
@@ -76,7 +95,7 @@ export class Jev {
     if (this.client || this.problem) return this.client;
     const { apiKey, model } = this.credentials();
     if (!apiKey) {
-      this.problem = "No TYPESAFE_API_KEY found (env, jev.envFile, OCU_ENV_FILE or JEV_9000_ENV_FILE).";
+      this.problem = "No TypeSafe API key found. Run `open-cu jev setup` in a terminal, or set TYPESAFE_API_KEY.";
       return undefined;
     }
     this.client = new TypeSafeClient({

@@ -15,7 +15,17 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Computer, type ToolOutput } from "./computer.ts";
-import { APPROVAL_MODES, configPath, loadConfig, parseApprovalMode, setApprovalMode, updateApprovedApps } from "./config.ts";
+import {
+  APPROVAL_MODES,
+  type Config,
+  configDir,
+  configPath,
+  loadConfig,
+  parseApprovalMode,
+  setApprovalMode,
+  updateApprovedApps,
+  updateJevSettings,
+} from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { Jev } from "./jev.ts";
 import { createPlatform } from "./platform.ts";
@@ -33,7 +43,7 @@ function parseArgs(argv: string[]): Flags {
       const [name, inline] = arg.slice(2).split("=", 2) as [string, string | undefined];
       const next = argv[i + 1];
       if (inline !== undefined) options.set(name, inline);
-      else if (["window", "query", "screenshot", "limit"].includes(name) && next !== undefined) {
+      else if (["window", "query", "screenshot", "limit", "env-file"].includes(name) && next !== undefined) {
         options.set(name, next);
         i++;
       } else options.set(name, true);
@@ -82,9 +92,94 @@ Usage:
   open-cu approve <app.exe>        Always allow an app
   open-cu revoke <app.exe>         Remove an app from the allow list
   open-cu approval [prompt|allowlist|all]   Show or set how apps get approved ("all" approves every app)
+  open-cu jev setup                Turn on Jev targeting: enter your TypeSafe API key (masked) and check it
+  open-cu jev on [--env-file <path>] | off | status
   open-cu config                   Show the config file path and contents
 
 Flags: --jev / --no-jev turn Jev targeting on or off for this run.`;
+
+/** Read a secret without echoing it. Piped input (CI) is read as is. */
+async function promptSecret(question: string): Promise<string> {
+  if (!process.stdin.isTTY) return readFileSync(0, "utf8").trim();
+  process.stdout.write(question);
+  const stdin = process.stdin;
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.setEncoding("utf8");
+  return new Promise((resolve, reject) => {
+    let value = "";
+    const done = (error?: Error) => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.off("data", onData);
+      process.stdout.write("\n");
+      if (error) reject(error);
+      else resolve(value.trim());
+    };
+    const onData = (chunk: string) => {
+      for (const char of chunk) {
+        if (char === "\r" || char === "\n") return done();
+        if (char === "\u0003") return done(new Error("Cancelled."));
+        if (char === "\u007f" || char === "\b") value = value.slice(0, -1);
+        else value += char;
+      }
+    };
+    stdin.on("data", onData);
+  });
+}
+
+async function jevCommand(action: string | undefined, options: Flags["options"], config: Config): Promise<void> {
+  const report = async (settings: Config["jev"]) => {
+    const jev = new Jev({ ...settings, enabled: true });
+    const { source } = jev.credentials();
+    if (!settings.enabled) console.log("Jev targeting: off.");
+    if (!source) {
+      console.log("No TypeSafe API key found. Run `open-cu jev setup` to add one.");
+      return;
+    }
+    console.log(`Key: from ${source}.`);
+    try {
+      const check = await jev.verify();
+      console.log(`Jev ${settings.enabled ? "targeting: on" : "is reachable"}, model ${check.model} answered in ${check.ms} ms.`);
+    } catch (error) {
+      console.log(`The key did not work: ${errorMessage(error).split("\n")[0]}`);
+      process.exitCode = 1;
+    }
+  };
+  switch (action) {
+    case "setup": {
+      console.log("Jev picks UI elements from descriptions. Element names from the apps you use are sent to TypeSafe's API.");
+      console.log("Get a key at https://console.typesafe.ai/keys");
+      const key = await promptSecret("TypeSafe API key (input hidden): ");
+      if (!key) throw new Error("No key entered; nothing changed.");
+      const file = join(configDir(), "jev.env");
+      mkdirSync(configDir(), { recursive: true });
+      writeFileSync(file, `TYPESAFE_API_KEY=${key}\n`, { mode: 0o600 });
+      updateJevSettings({ enabled: true, envFile: file });
+      console.log(`Saved to ${file} and turned Jev targeting on. New agent sessions use it.`);
+      await report({ ...config.jev, enabled: true, envFile: file });
+      return;
+    }
+    case "on":
+    case "off": {
+      const envFile = options.get("env-file");
+      const change = { enabled: action === "on", ...(typeof envFile === "string" ? { envFile } : {}) };
+      updateJevSettings(change);
+      if (action === "off") {
+        console.log("Jev targeting: off. New agent sessions use name matching only.");
+        return;
+      }
+      await report({ ...config.jev, ...change });
+      return;
+    }
+    case "status":
+    case undefined:
+      await report(config.jev);
+      return;
+    default:
+      throw new Error("Usage: open-cu jev <setup|on|off|status> [--env-file <path>]");
+  }
+}
 
 async function main(): Promise<void> {
   const { positional, options } = parseArgs(process.argv.slice(2));
@@ -121,6 +216,9 @@ async function main(): Promise<void> {
       console.log(`Approval mode: ${mode} (${meaning}).`);
       return;
     }
+    case "jev":
+      await jevCommand(rest[0], options, config);
+      return;
     case "config":
       console.log(configPath());
       console.log(JSON.stringify(config, null, 2));

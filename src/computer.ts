@@ -774,7 +774,9 @@ export class Computer {
   async doctor(): Promise<ToolOutput> {
     const lines: string[] = [];
     const ping = await this.helper.call("ping", {});
-    const built = new Date(statSync(this.platform.helperPath).mtimeMs).toISOString().replace("T", " ").slice(0, 19);
+    const built = this.platform.helperPath
+      ? new Date(statSync(this.platform.helperPath).mtimeMs).toISOString().replace("T", " ").slice(0, 19)
+      : "n/a";
     lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);

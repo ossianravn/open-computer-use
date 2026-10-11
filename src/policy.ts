@@ -136,7 +136,8 @@ export class Approvals {
     throw new ToolError(
       "app_not_approved",
       `open-cu needs the user's permission to use ${app.label}. Ask the user to approve it by running ` +
-        `\`open-cu approve ${app.exe}\` (or \`open-cu approval all\` to approve every app), then retry. Settings: ${configPath()}.`,
+        `\`open-cu approve ${app.exe}\` (or \`open-cu approval all\` to approve every app), or by adding "${app.exe}" to ` +
+        `"approvedApps" in ${configPath()}; then retry.`,
     );
   }
 }

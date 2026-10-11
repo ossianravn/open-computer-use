@@ -77,6 +77,11 @@ export function configPath(): string {
   return process.env.OCU_CONFIG ?? join(homedir(), ".open-cu", "config.json");
 }
 
+/** Where open-cu keeps its own files (the config file's folder). */
+export function configDir(): string {
+  return dirname(configPath());
+}
+
 function readFileConfig(path: string): Partial<Config> {
   if (!existsSync(path)) return {};
   try {
@@ -130,4 +135,8 @@ export function updateApprovedApps(change: (apps: string[]) => string[]): string
 
 export function setApprovalMode(mode: ApprovalMode): void {
   updateConfigFile((file) => ({ ...file, approval: mode }));
+}
+
+export function updateJevSettings(change: Partial<JevSettings>): void {
+  updateConfigFile((file) => ({ ...file, jev: { ...file.jev, ...change } as JevSettings }));
 }

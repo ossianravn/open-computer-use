@@ -1,0 +1,12 @@
+{
+  "name": "open-cu",
+  "description": "Open Computer Use: operate Windows desktop apps from your coding agent.",
+  "owner": { "name": "ossianravn" },
+  "plugins": [
+    {
+      "name": "open-cu",
+      "source": "./",
+      "description": "Operate Windows desktop apps from your coding agent through their accessibility tree."
+    }
+  ]
+}

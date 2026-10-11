@@ -1,45 +1,54 @@
 {
   "name": "@ossianravn/open-cu",
   "version": "0.1.0",
-  "description": "open-cu (Open Computer Use): open, agent-agnostic computer use over MCP: drive desktop apps through the accessibility tree, with optional TypeSafe Jev targeting.",
+  "description": "Open Computer Use for any AI agent: operate Windows desktop apps through their accessibility tree over MCP, with optional TypeSafe Jev targeting.",
   "license": "MIT",
+  "author": "ossianravn",
   "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ossianravn/open-computer-use.git"
   },
-  "keywords": ["mcp", "computer-use", "ui-automation", "accessibility", "agents", "codex", "claude", "jev", "typesafe"],
+  "homepage": "https://github.com/ossianravn/open-computer-use#readme",
+  "keywords": ["mcp", "computer-use", "ui-automation", "accessibility", "agents", "codex", "claude-code", "opencode", "jev", "typesafe"],
   "bin": {
     "open-cu": "dist/cli.mjs"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
   },
   "engines": {
     "node": ">=22.18.0"
   },
   "files": [
+    "index.js",
+    "opencode",
     "dist",
     "native/windows/bin",
     "skills",
+    "plugin.json",
+    "mcp.json",
     "docs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:native && npm run build:js",
+    "build:all": "npm run build:native && npm run build:js",
     "build:js": "node scripts/build.mjs",
     "build:native": "node scripts/build-native.mjs",
     "check": "tsc --noEmit",
+    "validate": "node scripts/validate.mjs",
     "test": "node --test \"tests/unit/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.ts\"",
     "dev": "node src/cli.ts"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
-    "@typesafe-ai/sdk": "0.6.0",
-    "zod": "4.6.5"
-  },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.0.0",
+    "@typesafe-ai/sdk": "0.6.0",
     "esbuild": "0.28.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "zod": "4.6.5"
   }
 }
