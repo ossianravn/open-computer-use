@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -14,6 +14,8 @@ export type InstalledApp = { name: string; id: string };
 export interface Platform {
   readonly name: string;
   readonly helper: HelperClient;
+  /** The helper executable in use. */
+  readonly helperPath: string;
   installedApps(): Promise<InstalledApp[]>;
   /** Start an installed app by Start-menu id, or a bare program name the shell resolves. */
   launch(app: InstalledApp | { program: string }): Promise<void>;
@@ -26,12 +28,15 @@ function packageRoot(): string {
 }
 
 export function windowsHelperPath(): string {
-  const candidates = [
-    process.env.OCU_WINDOWS_HELPER,
+  if (process.env.OCU_WINDOWS_HELPER) return process.env.OCU_WINDOWS_HELPER;
+  // The packaged copy (bin) and a fresh cargo build (target) can both exist in a
+  // checkout; use whichever is newer so a rebuild is never shadowed by a stale copy.
+  const found = [
     join(packageRoot(), "native", "windows", "bin", "ocu-win.exe"),
     join(packageRoot(), "native", "windows", "target", "release", "ocu-win.exe"),
-  ].filter((path): path is string => !!path);
-  const found = candidates.find((path) => existsSync(path));
+  ]
+    .filter((path) => existsSync(path))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
   if (!found) {
     throw new ToolError(
       "helper_missing",
@@ -44,10 +49,12 @@ export function windowsHelperPath(): string {
 class WindowsPlatform implements Platform {
   readonly name = "windows";
   readonly helper: HelperClient;
+  readonly helperPath: string;
   private installed: { at: number; apps: InstalledApp[] } | undefined;
 
   constructor() {
-    this.helper = new HelperClient(windowsHelperPath());
+    this.helperPath = windowsHelperPath();
+    this.helper = new HelperClient(this.helperPath);
   }
 
   async installedApps(): Promise<InstalledApp[]> {

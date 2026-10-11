@@ -98,6 +98,14 @@ test("fills the form and reports only the changes", { skip: !windows }, async ()
   assert.match(batch.text, /Status: submitted Grace Hopper <grace@example.com> plan=Team colour=Green subscribed=True/);
 });
 
+test("types shifted, AltGr, accented and emoji characters intact", { skip: !windows }, async () => {
+  const text = "Ærø & Co: @{}[]$€ \"quoted\" 50% ~^´ é ü — 🙂 done";
+  const typed = await call("type_text", { app: title, target: "notes", text });
+  assert.equal(typed.isError, false, typed.text);
+  assert.doesNotMatch(typed.text, /did not confirm/);
+  assert.ok(typed.text.includes(`Notes, Value: ${text}`), typed.text);
+});
+
 test("element indices stay valid and unknown ones fail clearly", { skip: !windows }, async () => {
   const state = await call("get_app_state", { app: title });
   const save = state.text.match(/^(\d+) button Save draft/m);

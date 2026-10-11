@@ -155,10 +155,14 @@ function dispose(node: StateNode, parent: StateNode | undefined, next: StateNode
   if (node.role === "Text" && name && parent && clean(parent.name) === name) return "drop";
   // A form label followed by the control it names: the control line carries the name.
   if (node.role === "Text" && name && next && LABELLED_CONTROLS.has(next.role) && clean(next.name) === name) return "drop";
-  if (CONTAINER_ROLES.has(node.role) && !node.focused && !node.value && !node.scroll) {
+  // Unnamed wrappers (WinUI marks many of them focusable, even focused) carry nothing
+  // an agent can use: hoist their children, drop them when empty.
+  if (CONTAINER_ROLES.has(node.role) && !node.value && !node.scroll) {
     const actionable = node.actions.some((action) => INTERACTIVE_ACTIONS.has(action));
-    if (!name && !actionable && node.children.length === 0) return "drop";
-    if (!actionable && !node.focusable && (!name || (parent && clean(parent.name) === name))) return "hoist";
+    if (!actionable && (!name || (parent && clean(parent.name) === name))) {
+      if (node.children.length > 0) return "hoist";
+      return node.focused ? "keep" : "drop";
+    }
   }
   return "keep";
 }

@@ -751,6 +751,16 @@ impl Session {
         Ok(result)
     }
 
+    /// Type text, confirming against the focused element's value as it goes.
+    pub fn type_text(&mut self, params: Value) -> Result<Value, RpcError> {
+        let automation = self.automation.clone();
+        crate::input::type_text(params, move || unsafe {
+            let element = automation.GetFocusedElement().ok()?;
+            let pattern = element.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId).ok()?;
+            Some(pattern.CurrentValue().ok()?.len())
+        })
+    }
+
     pub fn focused_element(&mut self, params: Value) -> Result<Value, RpcError> {
         let params: FocusParams = parse(params)?;
         let element = unsafe { self.automation.GetFocusedElement()? };

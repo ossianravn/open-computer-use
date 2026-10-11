@@ -2,7 +2,7 @@
 // (cli.ts) are thin wrappers around this class.
 
 import { type Resolved, aliasExe, displayName, parseWindowId, resolveWindow } from "./apps.ts";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { type Config, LAST_CLIENT_FILE } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
@@ -599,8 +599,11 @@ export class Computer {
       await this.elementCall(state, node, "focus");
       summary.push(`Focused ${node.index} ${clean(node.name) || node.role}.`);
     }
-    await this.helper.call("typeText", { text: args.text, hwnd: state.hwnd });
-    summary.push(`Typed ${args.text.length} characters.`);
+    const typed = await this.helper.call("typeText", { text: args.text, hwnd: state.hwnd });
+    summary.push(`Typed ${typed.characters} characters.`);
+    if (typed.unconfirmed > 0) {
+      summary.push(`Warning: the app did not confirm ${typed.unconfirmed} of them in time; check the text below.`);
+    }
     return this.outcome(state, before, beforeWindows, summary, args);
   }
 
@@ -771,7 +774,8 @@ export class Computer {
   async doctor(): Promise<ToolOutput> {
     const lines: string[] = [];
     const ping = await this.helper.call("ping", {});
-    lines.push(`Helper: ocu-win ${ping.version} (${ping.platform})`);
+    const built = new Date(statSync(this.platform.helperPath).mtimeMs).toISOString().replace("T", " ").slice(0, 19);
+    lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);
     lines.push(`Approval mode: ${this.config.approval}; approved apps: ${this.config.approvedApps.join(", ") || "none"}`);

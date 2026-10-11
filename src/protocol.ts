@@ -143,7 +143,11 @@ export type HelperMethods = {
     result: { ok: true; foreground: boolean };
   };
   scroll: { params: { x: number; y: number; dx?: number; dy?: number; hwnd?: number }; result: { ok: true } };
-  typeText: { params: { text: string; hwnd?: number }; result: { ok: true; foreground: boolean; characters: number } };
+  typeText: {
+    params: { text: string; hwnd?: number };
+    /** `unconfirmed`: characters the focused element's text did not show in time. */
+    result: { ok: true; foreground: boolean; characters: number; unicodePackets: number; unconfirmed: number };
+  };
   pressKey: { params: { key: string; hwnd?: number; repeat?: number }; result: { ok: true; foreground: boolean } };
   screenshot: {
     params: { hwnd?: number; maxEdge?: number; format?: "jpeg" | "png"; quality?: number };

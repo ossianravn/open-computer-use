@@ -86,7 +86,7 @@ fn dispatch(session: &mut uia::Session, method: &str, params: Value) -> Result<V
         "moveMouse" => input::move_mouse(params),
         "drag" => input::drag(params),
         "scroll" => input::scroll(params),
-        "typeText" => input::type_text(params),
+        "typeText" => session.type_text(params),
         "pressKey" => input::press_key(params),
         "screenshot" => capture::screenshot(params),
         "guardStatus" => guard::status(params),

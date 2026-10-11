@@ -130,6 +130,34 @@ Every action follows the same steps:
 `perform_actions` runs steps against the already-approved window with a short settle
 between steps, and returns one diff against the state before the batch.
 
+## Typing
+
+`typeText` types the way a keyboard does, because some apps get synthetic input wrong.
+WinUI apps such as Windows 11 Notepad work out a key's character from the keyboard
+state at the moment they process it, not when it was sent. Measured failures with plain
+bursts:
+
+- Unicode packets: "abc" arrived as "ccc".
+- Shift and AltGr released early: "Æ" became "æ", "@" became "2".
+- Keys arriving faster than the app keeps up were dropped.
+
+The helper therefore:
+
+1. Maps each character through the target window's keyboard layout to a real key plus
+   Shift or AltGr (the right Alt key, not Ctrl+Alt). Unicode packets are used only for
+   characters the layout cannot type (emoji, dead-key characters such as ^ ´ ~, other
+   scripts).
+2. Groups characters by the modifiers they need. It holds those modifiers for the whole
+   group, and before changing them waits until the focused element's text shows the
+   group has landed.
+3. Sends one key at a time, a few milliseconds apart. After each key it waits for the
+   window's thread to handle a `WM_NULL` sent message, which bounds how far the app
+   can fall behind without polling the text.
+
+On the hard case (`Ærø & Østerbro, @{}[]$€ "q" 50% ~^´ é ü — 🙂`), this went from
+garbled to exact in every run. `type_text` reports characters the text did not confirm
+in time.
+
 ## Policy (`policy.ts`)
 
 - **Hard blocks:** terminals (process names and console window classes), password

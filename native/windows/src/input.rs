@@ -5,14 +5,15 @@
 //! an overlay or a popup from a different process never receives the click.
 
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use windows::Win32::Foundation::POINT;
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GA_ROOT, GetAncestor, GetCursorPos, GetWindowThreadProcessId, SetCursorPos, WindowFromPoint,
+    GA_ROOT, GetAncestor, GetCursorPos, GetForegroundWindow, GetWindowThreadProcessId, SMTO_ABORTIFHUNG,
+    SendMessageTimeoutW, SetCursorPos, WM_NULL, WindowFromPoint,
 };
 
 use crate::rpc::{RpcError, parse};
@@ -297,24 +298,205 @@ struct TypeParams {
     hwnd: Option<i64>,
 }
 
-pub fn type_text(params: Value) -> Result<Value, RpcError> {
-    let params: TypeParams = parse(params)?;
-    let foreground = prepare_target(params.hwnd, None, true)?;
-    let mut inputs = Vec::new();
-    for unit in params.text.encode_utf16() {
+/// Part of a text, typed with one keyboard state.
+enum Segment {
+    /// Plain key presses typed while `modifiers` are held (Shift, AltGr).
+    Keys { modifiers: Vec<VIRTUAL_KEY>, presses: Vec<INPUT>, units: usize },
+    /// One character the layout cannot type, sent as a Unicode packet.
+    Packet { inputs: Vec<INPUT>, units: usize },
+    /// Enter or Tab: may move focus or submit, so the text can change in other ways.
+    Special { inputs: Vec<INPUT> },
+}
+
+/// The key and modifiers that type `unit` on a keyboard layout, like a person would.
+/// None when the layout has no plain key for it (emoji, other scripts, dead keys
+/// such as ^ or ´, which would combine with the next character).
+fn layout_key(unit: u16, layout: HKL, caps_lock: bool) -> Option<(VIRTUAL_KEY, Vec<VIRTUAL_KEY>)> {
+    let scan = unsafe { VkKeyScanExW(unit, layout) };
+    if scan == -1 {
+        return None;
+    }
+    let vk = VIRTUAL_KEY((scan as u16) & 0xff);
+    let state = ((scan as u16) >> 8) & 0xff;
+    if state & !0x7 != 0 {
+        return None;
+    }
+    if unsafe { MapVirtualKeyExW(vk.0 as u32, MAPVK_VK_TO_CHAR, Some(layout)) } & 0x8000_0000 != 0 {
+        return None;
+    }
+    let mut shift = state & 1 != 0;
+    if caps_lock && char::from_u32(unit as u32).is_some_and(char::is_alphabetic) {
+        shift = !shift;
+    }
+    let mut modifiers = Vec::new();
+    if shift {
+        modifiers.push(VK_SHIFT);
+    }
+    match state & 6 {
+        // AltGr: the right Alt key. Windows adds the implied Ctrl itself; a separate
+        // Ctrl+Alt reads as a shortcut in many apps.
+        6 => modifiers.push(VK_RMENU),
+        2 => modifiers.push(VK_CONTROL),
+        4 => modifiers.push(VK_MENU),
+        _ => {}
+    }
+    Some((vk, modifiers))
+}
+
+fn plan(text: &str, layout: HKL, caps_lock: bool) -> Vec<Segment> {
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let mut segments: Vec<Segment> = Vec::new();
+    let mut index = 0;
+    while index < units.len() {
+        let unit = units[index];
+        index += 1;
         match unit {
             0x0D => {} // \r: \n already produces Enter
-            0x0A => inputs.extend([key(VK_RETURN, false), key(VK_RETURN, true)]),
-            0x09 => inputs.extend([key(VK_TAB, false), key(VK_TAB, true)]),
-            _ => inputs.extend([unicode(unit, false), unicode(unit, true)]),
+            0x0A => segments.push(Segment::Special { inputs: vec![key(VK_RETURN, false), key(VK_RETURN, true)] }),
+            0x09 => segments.push(Segment::Special { inputs: vec![key(VK_TAB, false), key(VK_TAB, true)] }),
+            _ => match layout_key(unit, layout, caps_lock) {
+                Some((vk, modifiers)) => {
+                    if let Some(Segment::Keys { modifiers: held, presses, units }) = segments.last_mut() {
+                        if *held == modifiers {
+                            presses.extend([key(vk, false), key(vk, true)]);
+                            *units += 1;
+                            continue;
+                        }
+                    }
+                    segments.push(Segment::Keys { modifiers, presses: vec![key(vk, false), key(vk, true)], units: 1 });
+                }
+                None => {
+                    let mut inputs = vec![unicode(unit, false)];
+                    let mut count = 1;
+                    if (0xD800..=0xDBFF).contains(&unit) && index < units.len() {
+                        inputs.extend([unicode(units[index], false), unicode(units[index], true)]);
+                        index += 1;
+                        count = 2;
+                    }
+                    inputs.push(unicode(unit, true));
+                    segments.push(Segment::Packet { inputs, units: count });
+                }
+            },
         }
     }
-    // Small batches keep slow apps from dropping characters.
-    for chunk in inputs.chunks(48) {
-        send(chunk)?;
-        sleep(Duration::from_millis(4));
+    segments
+}
+
+/// Flow control: wait until the window's thread is back at its message loop. A sent
+/// message is handled only when the thread finishes what it is doing, so input is never
+/// sent much faster than the app can process it. Apps that fall behind drop or garble
+/// keys (see `type_text`).
+fn catch_up(window: HWND) {
+    unsafe {
+        let _ = SendMessageTimeoutW(window, WM_NULL, WPARAM(0), LPARAM(0), SMTO_ABORTIFHUNG, 500, None);
     }
-    Ok(json!({ "ok": true, "foreground": foreground, "characters": params.text.chars().count() }))
+}
+
+fn key_delay_ms() -> u64 {
+    std::env::var("OCU_KEY_DELAY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(5)
+}
+
+/// Wait until the focused element's text has taken `units` more characters (or has
+/// changed and settled, when typing replaced a selection). Returns false on timeout.
+/// Without a readable value, waits a conservative time per character instead.
+fn wait_applied(value_len: &mut impl FnMut() -> Option<usize>, start: Option<usize>, units: usize) -> bool {
+    let Some(start) = start else {
+        sleep(Duration::from_millis((units as u64 * 20).min(1500)));
+        return true;
+    };
+    let expected = start + units;
+    let begun = Instant::now();
+    let timeout = Duration::from_millis(1000 + 40 * units as u64);
+    let mut last = start;
+    let mut since = Instant::now();
+    loop {
+        let Some(len) = value_len() else { return false };
+        if len == expected {
+            return true;
+        }
+        if len != last {
+            last = len;
+            since = Instant::now();
+        } else if len != start && since.elapsed() >= Duration::from_millis(80) {
+            return true;
+        }
+        if begun.elapsed() > timeout {
+            return false;
+        }
+        sleep(Duration::from_millis(10));
+    }
+}
+
+/// Type text into the focused element.
+///
+/// Characters go out as real key presses through the target's keyboard layout, grouped
+/// by the modifiers they need. Some apps (WinUI apps such as Windows 11 Notepad) work
+/// out a typed character from the keyboard state at the moment they process the key,
+/// not when it was sent. A burst then arrives garbled: "Æ" as "æ", "@" as "2", and a
+/// run of Unicode packets as copies of the last one. So between groups, while
+/// Shift/AltGr is still held, the helper waits until the focused element's text shows
+/// the group has landed. `value_len` reads that text's length; it returns None when
+/// there is no readable value (password fields among them).
+pub fn type_text(params: Value, mut value_len: impl FnMut() -> Option<usize>) -> Result<Value, RpcError> {
+    let params: TypeParams = parse(params)?;
+    let foreground = prepare_target(params.hwnd, None, true)?;
+    let layout = unsafe { GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None)) };
+    let caps_lock = unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 1 != 0;
+    let segments = plan(&params.text, layout, caps_lock);
+    let window = unsafe { GetForegroundWindow() };
+    // Start only once the app is idle (it may still be busy, e.g. answering a big
+    // accessibility read).
+    catch_up(window);
+    let mut packets = 0;
+    let mut unconfirmed = 0;
+    for segment in segments {
+        let start = value_len();
+        match segment {
+            Segment::Keys { modifiers, presses, units } => {
+                send(&modifiers.iter().map(|&m| key(m, false)).collect::<Vec<_>>())?;
+                if !modifiers.is_empty() {
+                    sleep(Duration::from_millis(key_delay_ms()));
+                }
+                let result = (|| {
+                    // One key at a time, a few milliseconds apart: some apps drop keys
+                    // that arrive faster than a person could type.
+                    for press in presses.chunks(2) {
+                        send(press)?;
+                        sleep(Duration::from_millis(key_delay_ms()));
+                        catch_up(window);
+                    }
+                    Ok::<(), RpcError>(())
+                })();
+                let landed = result.is_ok() && wait_applied(&mut value_len, start, units);
+                // Release the modifiers even if sending failed midway.
+                let _ = send(&modifiers.iter().rev().map(|&m| key(m, true)).collect::<Vec<_>>());
+                result?;
+                if !landed {
+                    unconfirmed += units;
+                }
+            }
+            Segment::Packet { inputs, units } => {
+                send(&inputs)?;
+                catch_up(window);
+                packets += 1;
+                if !wait_applied(&mut value_len, start, units) {
+                    unconfirmed += units;
+                }
+            }
+            Segment::Special { inputs } => {
+                send(&inputs)?;
+                // Enter/Tab may submit or move focus; give the app a moment to settle.
+                sleep(Duration::from_millis(60));
+            }
+        }
+    }
+    Ok(json!({
+        "ok": true,
+        "foreground": foreground,
+        "characters": params.text.chars().count(),
+        "unicodePackets": packets,
+        "unconfirmed": unconfirmed,
+    }))
 }
 
 fn unknown_key(name: &str) -> RpcError {
@@ -465,9 +647,11 @@ pub fn press_key(params: Value) -> Result<Value, RpcError> {
         if index > 0 {
             sleep(Duration::from_millis(20));
         }
-        let mut inputs: Vec<INPUT> = keys.iter().map(|&vk| key(vk, false)).collect();
-        inputs.extend(keys.iter().rev().map(|&vk| key(vk, true)));
-        send(&inputs)?;
+        // Hold the whole chord briefly: some apps read which keys are down when they
+        // process a key, not when it was sent (see `type_text`).
+        send(&keys.iter().map(|&vk| key(vk, false)).collect::<Vec<_>>())?;
+        sleep(Duration::from_millis(40));
+        send(&keys.iter().rev().map(|&vk| key(vk, true)).collect::<Vec<_>>())?;
     }
     Ok(json!({ "ok": true, "foreground": foreground }))
 }
