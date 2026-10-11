@@ -1,6 +1,6 @@
 # A deterministic WinForms window for exercising open-computer-use end to end.
 # Run: pwsh -NoProfile -File fixtures/windows/fixture.ps1 [-Title "OCU Fixture"]
-param([string]$Title = "OCU Fixture")
+param([string]$Title = "OCU Fixture", [switch]$Maximized)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -10,6 +10,7 @@ $form = New-Object System.Windows.Forms.Form
 $form.Text = $Title
 $form.Size = New-Object System.Drawing.Size(560, 460)
 $form.StartPosition = "CenterScreen"
+if ($Maximized) { $form.WindowState = "Maximized" }
 
 function Add-Control($control, $x, $y, $w, $h) {
     $control.Location = New-Object System.Drawing.Point($x, $y)

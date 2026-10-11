@@ -154,6 +154,9 @@ export type HelperMethods = {
     result: Screenshot;
   };
   guardStatus: { params: Record<string, never>; result: GuardStatus };
+  /** Show (or keep showing) the "agent is using your computer" overlay on the window's monitor. */
+  overlayShow: { params: { hwnd: number; label: string; idleMs?: number }; result: { ok: true; enabled: boolean } };
+  overlayHide: { params: Record<string, never>; result: { ok: true; enabled: boolean } };
   clearStop: { params: Record<string, never>; result: { ok: true } };
 };
 

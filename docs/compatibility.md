@@ -66,4 +66,11 @@ Same date and machine:
   - Chrome with a throwaway profile on Wikipedia: snapshots, inline links, scrolling
     and Jev targets.
 
+- **Overlay** (same machine, 3455×2040 monitor at 250% scaling):
+  - The glow and label render.
+  - A hit-test under the label lands on the app beneath.
+  - The overlay's windows are not listed as apps.
+  - It fades out after its idle time.
+  - With default settings it is absent from screen capture.
+
 See [architecture.md](architecture.md#typing) for the typing behaviour found in Notepad.

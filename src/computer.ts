@@ -136,8 +136,17 @@ export class Computer {
       this.states.set(resolved.window.hwnd, state);
     }
     state.window = resolved.window;
+    this.touch(state);
     if (!state.root) await this.refresh(state);
     return { state, resolved, all };
+  }
+
+  /** Keep the "agent is using your computer" overlay up on this window's screen. */
+  private touch(state: WindowState): void {
+    if (!this.config.overlay) return;
+    this.helper
+      .call("overlayShow", { hwnd: state.hwnd, label: displayName(state.window), idleMs: this.config.overlayIdleMs })
+      .catch(() => undefined);
   }
 
   private async refresh(state: WindowState, includeOffscreen = false): Promise<View> {
@@ -343,7 +352,10 @@ export class Computer {
 
   private async begin(args: AppArgs): Promise<{ state: WindowState; before: View; beforeWindows: WindowInfo[]; note?: string }> {
     // Inside perform_actions the window is already resolved, approved and fresh.
-    if (this.batch) return { state: this.batch, before: this.view(this.batch), beforeWindows: [] };
+    if (this.batch) {
+      this.touch(this.batch);
+      return { state: this.batch, before: this.view(this.batch), beforeWindows: [] };
+    }
     const { state, resolved, all } = await this.open(args);
     // Act on what is there now: re-read when the last observation is not fresh.
     if (Date.now() - state.takenAt > 1500) await this.refresh(state);
@@ -780,6 +792,9 @@ export class Computer {
     lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);
+    lines.push(
+      `Overlay: ${this.config.overlay ? `on (blue screen-edge glow while the agent works; hides after ${this.config.overlayIdleMs / 1000} s idle)` : "off"}`,
+    );
     lines.push(`Approval mode: ${this.config.approval}; approved apps: ${this.config.approvedApps.join(", ") || "none"}`);
     const status = this.jev?.status();
     lines.push(`Jev: ${status ? (status.ready ? `ready (model ${status.model})` : status.reason) : "off"}`);

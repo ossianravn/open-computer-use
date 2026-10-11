@@ -237,8 +237,11 @@ pub fn list_windows(params: Value) -> Result<Value, RpcError> {
     unsafe {
         EnumWindows(Some(collect), LPARAM(&mut handles as *mut Vec<HWND> as isize))?;
     }
+    let own_pid = std::process::id();
     let windows: Vec<WindowInfo> = handles
         .into_iter()
+        // The helper's own overlay windows are not apps.
+        .filter(|&hwnd| window_pid(hwnd) != own_pid)
         .filter(|&hwnd| {
             if params.include_all {
                 unsafe { IsWindowVisible(hwnd).as_bool() && !is_cloaked(hwnd) }

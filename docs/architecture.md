@@ -22,6 +22,7 @@
  │ input.rs      SendInput mouse/keyboard, occlusion check      │
  │ capture.rs    PrintWindow capture, DPI correction, JPEG/PNG  │
  │ guard.rs      low-level hooks: Esc stop, user-activity back-off │
+ │ overlay.rs    blue screen-edge glow + "open-cu is using …" label │
  │ windows_enum.rs  window inventory, activation                │
  └──────────────────────────────────────────────────────────────┘
 ```
@@ -129,6 +130,30 @@ Every action follows the same steps:
 
 `perform_actions` runs steps against the already-approved window with a short settle
 between steps, and returns one diff against the state before the batch.
+
+## Overlay
+
+While an agent uses an app, the helper shows a blue glow around the edges of that
+window's monitor, plus a label at the top centre: "open-cu is using *App* · Esc to
+stop". This is the open counterpart of the Codex Computer Use overlay.
+
+- **Trigger.** The server sends `overlayShow { hwnd, label, idleMs }` whenever a tool
+  resolves an app window (after the policy and approval checks). Every action inside
+  `perform_actions` sends it too.
+- **Lifetime.** It fades in over 180 ms and breathes gently while active (unless Windows
+  animations are off). After `idleMs` without activity (15 s by default) it fades out.
+  A physical Esc press hides it at once.
+- **Windows.** Five layered popups on their own message-loop thread: four edge strips
+  and the label. Small strips keep per-pixel-alpha bitmaps cheap even on 4K monitors.
+  Breathing changes only each window's constant alpha.
+- **Never in the way.**
+  - The windows are `WS_EX_TRANSPARENT` (click-through), `WS_EX_NOACTIVATE` and
+    topmost, and they hit-test transparent.
+  - They are excluded from screen capture (`WDA_EXCLUDEFROMCAPTURE`), so the agent's
+    screenshots never contain them.
+  - The helper leaves its own windows out of `listWindows` and the occlusion check.
+  - `OCU_OVERLAY_CAPTURE=1` makes them capturable, for documentation screenshots.
+- **Off switch.** `"overlay": false` in the config, or `OCU_OVERLAY=0`.
 
 ## Typing
 

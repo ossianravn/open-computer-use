@@ -96,6 +96,12 @@ fn ago(at: u64) -> Option<u64> {
     (at != 0).then(|| now_ms().saturating_sub(at))
 }
 
+/// True while a physical Esc press is holding computer use stopped.
+pub fn stop_requested() -> bool {
+    let esc = LAST_ESC.load(Ordering::Relaxed);
+    esc > CLEARED_AT.load(Ordering::Relaxed) && ago(esc).is_some_and(|ms| ms < stop_latch_ms())
+}
+
 /// Fail when the user pressed Esc recently. Applies to every state-changing call.
 pub fn check_stop() -> Result<(), RpcError> {
     let esc = LAST_ESC.load(Ordering::Relaxed);

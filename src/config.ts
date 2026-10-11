@@ -49,6 +49,10 @@ export type Config = {
   maxStateLines: number;
   /** Wait after an action before reading the new state. */
   settleMs: number;
+  /** Show a blue screen-edge glow and label while the agent uses the computer. */
+  overlay: boolean;
+  /** Hide the overlay after this long without agent activity. */
+  overlayIdleMs: number;
   jev: JevSettings;
 };
 
@@ -61,6 +65,8 @@ export const DEFAULT_CONFIG: Config = {
   screenshotMaxEdge: 1366,
   maxStateLines: 600,
   settleMs: 200,
+  overlay: true,
+  overlayIdleMs: 15_000,
   jev: {
     enabled: false,
     minConfidence: 0.5,
@@ -110,6 +116,8 @@ export function loadConfig(overrides: { jev?: boolean } = {}): Config {
   if (approval) config.approval = approval;
   const screenshots = process.env.OCU_SCREENSHOTS as ScreenshotMode | undefined;
   if (screenshots && ["auto", "always", "never"].includes(screenshots)) config.screenshots = screenshots;
+  const overlay = envFlag("OCU_OVERLAY");
+  if (overlay !== undefined) config.overlay = overlay;
   const jev = overrides.jev ?? envFlag("OCU_JEV");
   if (jev !== undefined) config.jev.enabled = jev;
   if (process.env.OCU_JEV_MODEL) config.jev.model = process.env.OCU_JEV_MODEL;

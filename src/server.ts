@@ -11,7 +11,7 @@ import { Jev } from "./jev.ts";
 import { createPlatform } from "./platform.ts";
 import type { ApprovalDecision, AskUser } from "./policy.ts";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 function instructions(jevOn: boolean): string {
   return [

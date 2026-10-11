@@ -7339,6 +7339,8 @@ var DEFAULT_CONFIG = {
   screenshotMaxEdge: 1366,
   maxStateLines: 600,
   settleMs: 200,
+  overlay: true,
+  overlayIdleMs: 15e3,
   jev: {
     enabled: false,
     minConfidence: 0.5,
@@ -7379,6 +7381,8 @@ function loadConfig(overrides = {}) {
   if (approval) config2.approval = approval;
   const screenshots = process.env.OCU_SCREENSHOTS;
   if (screenshots && ["auto", "always", "never"].includes(screenshots)) config2.screenshots = screenshots;
+  const overlay = envFlag("OCU_OVERLAY");
+  if (overlay !== void 0) config2.overlay = overlay;
   const jev = overrides.jev ?? envFlag("OCU_JEV");
   if (jev !== void 0) config2.jev.enabled = jev;
   if (process.env.OCU_JEV_MODEL) config2.jev.model = process.env.OCU_JEV_MODEL;
@@ -8935,8 +8939,14 @@ var Computer = class {
       this.states.set(resolved.window.hwnd, state);
     }
     state.window = resolved.window;
+    this.touch(state);
     if (!state.root) await this.refresh(state);
     return { state, resolved, all };
+  }
+  /** Keep the "agent is using your computer" overlay up on this window's screen. */
+  touch(state) {
+    if (!this.config.overlay) return;
+    this.helper.call("overlayShow", { hwnd: state.hwnd, label: displayName(state.window), idleMs: this.config.overlayIdleMs }).catch(() => void 0);
   }
   async refresh(state, includeOffscreen = false) {
     let snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
@@ -9103,7 +9113,10 @@ Nothing was done. Retry with element_index, or a more specific target.`
     }
   }
   async begin(args) {
-    if (this.batch) return { state: this.batch, before: this.view(this.batch), beforeWindows: [] };
+    if (this.batch) {
+      this.touch(this.batch);
+      return { state: this.batch, before: this.view(this.batch), beforeWindows: [] };
+    }
     const { state, resolved, all } = await this.open(args);
     if (Date.now() - state.takenAt > 1500) await this.refresh(state);
     return { state, before: this.view(state), beforeWindows: all, ...resolved.note ? { note: resolved.note } : {} };
@@ -9518,6 +9531,9 @@ ${result.text ?? ""}` };
     lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);
+    lines.push(
+      `Overlay: ${this.config.overlay ? `on (blue screen-edge glow while the agent works; hides after ${this.config.overlayIdleMs / 1e3} s idle)` : "off"}`
+    );
     lines.push(`Approval mode: ${this.config.approval}; approved apps: ${this.config.approvedApps.join(", ") || "none"}`);
     const status = this.jev?.status();
     lines.push(`Jev: ${status ? status.ready ? `ready (model ${status.model})` : status.reason : "off"}`);
@@ -39050,7 +39066,7 @@ var StdioServerTransport = class {
 // src/server.ts
 import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname as dirname3 } from "node:path";
-var VERSION2 = "0.1.0";
+var VERSION2 = "0.2.0";
 function instructions(jevOn) {
   return [
     "open-cu operates desktop apps on the user's computer through their accessibility tree, the way Codex Computer Use does.",

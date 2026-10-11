@@ -2,7 +2,7 @@
 
 ![open-cu: computer use for every agent. Claude Code, Codex, OpenCode and any MCP client.](docs/assets/header.jpg)
 
-[![Version 0.1.0](https://img.shields.io/badge/version-v0.1.0-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
+[![Version 0.2.0](https://img.shields.io/badge/version-v0.2.0-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
 
 **Let your coding agent use the apps on your computer.**
 
@@ -264,9 +264,14 @@ approval, and you approve it from a terminal:
 npx --yes github:ossianravn/open-computer-use approve calculatorapp.exe
 ```
 
-**3. Watch it work.** The agent launches Calculator, presses the buttons through
-Windows' accessibility interface (your mouse pointer doesn't move), and reports `42`.
-Press **Esc** at any time to stop it.
+**3. Watch it work.** While the agent works, a blue glow outlines your screen with a
+label at the top, so you always know when an agent is in control:
+
+<img src="docs/assets/overlay.png" width="520" alt="The open-cu overlay: a blue glow along the screen edge and a dark label reading 'open-cu is using Fixture · Esc to stop'">
+
+The agent launches Calculator, presses the buttons through Windows' accessibility
+interface (your mouse pointer doesn't move), and reports `42`. Press **Esc** at any
+time to stop it.
 
 > [!TIP]
 > **The `open-cu` command.** Commands in this README written as `open-cu …` need the
@@ -371,14 +376,20 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
   - sign-in and administrator (UAC) prompts;
   - AI agent apps (Claude, ChatGPT, Codex);
   - Windows-key shortcuts.
-- **You stay in charge.** Pressing **Esc** stops every action for 20 seconds, and the
-  agent backs off while you are using the keyboard or mouse. Only timestamps are kept,
-  never your keystrokes.
+- **You can see when it's working.** A blue glow around the screen, with the label
+  "open-cu is using *App* · Esc to stop", appears while an agent uses an app. It fades
+  out after 15 seconds without activity.
+  - It never takes focus or blocks a click.
+  - It is hidden from screenshots, so the agent never sees it.
+  - Turn it off with `"overlay": false` in the config or `OCU_OVERLAY=0`.
+- **You stay in charge.** Pressing **Esc** stops every action for 20 seconds and hides
+  the overlay at once. The agent also backs off while you are using the keyboard or
+  mouse. Only timestamps are kept, never your keystrokes.
 - **The agent is told** to ask before sending messages, buying, deleting or changing
   account settings. It never types passwords or payment details, and it treats text on
   screen as data, not instructions.
 - **Everything runs locally** except the optional Jev lookups. Settings live in
-  `~/.open-cu/config.json`.
+  `~/.open-cu/config.json`; see [docs/configuration.md](docs/configuration.md).
 
 ## How it works
 
@@ -431,7 +442,7 @@ folder to remove them too.
 
 ## Compatibility and status
 
-**v0.1.0 is an early release.** On 11 October 2026, these routes were installed from
+**v0.2.0 is an early release.** On 11 October 2026, these routes were installed from
 GitHub on Windows 11, each in an isolated profile. The installed server was then
 checked over MCP:
 

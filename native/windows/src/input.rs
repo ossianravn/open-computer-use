@@ -89,7 +89,8 @@ fn prepare_target(hwnd: Option<i64>, point: Option<Point>, allow_other: bool) ->
             let mut hit_pid = 0u32;
             GetWindowThreadProcessId(handle, Some(&mut target_pid));
             GetWindowThreadProcessId(root, Some(&mut hit_pid));
-            if root != handle && hit_pid != target_pid {
+            // The helper's own overlay is click-through; it never blocks the point.
+            if root != handle && hit_pid != target_pid && hit_pid != std::process::id() {
                 return Err(RpcError::new(
                     "point_occluded",
                     format!(

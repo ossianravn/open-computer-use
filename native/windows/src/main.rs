@@ -11,6 +11,7 @@
 mod capture;
 mod guard;
 mod input;
+mod overlay;
 mod rpc;
 mod uia;
 mod windows_enum;
@@ -38,6 +39,7 @@ fn main() {
     }
 
     guard::start();
+    overlay::start();
     let mut session = match uia::Session::new() {
         Ok(session) => session,
         Err(error) => {
@@ -91,6 +93,8 @@ fn dispatch(session: &mut uia::Session, method: &str, params: Value) -> Result<V
         "screenshot" => capture::screenshot(params),
         "guardStatus" => guard::status(params),
         "clearStop" => guard::clear_stop(params),
+        "overlayShow" => overlay::show(params),
+        "overlayHide" => overlay::hide(params),
         _ => Err(RpcError::new("unknown_method", format!("Unknown method {method}"))),
     }
 }
