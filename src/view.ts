@@ -7,7 +7,8 @@
 
 import type { StateNode, WindowState } from "./state.ts";
 
-export type ViewLine = { index: number; depth: number; text: string; node: StateNode };
+/** One rendered line. `inline` holds links merged into a text line as [name](#index). */
+export type ViewLine = { index: number; depth: number; text: string; node: StateNode; inline?: StateNode[] };
 
 export type View = {
   header: string;
@@ -60,12 +61,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 /** Subtrees that only add noise; the same capability is reachable another way. */
 const DROPPED_ROLES = new Set(["Separator", "Thumb", "ScrollBar", "TitleBar"]);
+/** Window chrome that apps draw themselves (UWP and WinUI title bars). */
+const DROPPED_IDS = new Set(["TitleBar", "SystemMenuBar", "TitleBarLeftButtons"]);
 const CONTAINER_ROLES = new Set(["Pane", "Group", "Custom", "Unknown"]);
 const LABELLED_CONTROLS = new Set(["Edit", "ComboBox", "Spinner", "Slider", "List", "Document", "Tree", "DataGrid", "Table"]);
 const INTERACTIVE_ACTIONS = new Set(["invoke", "toggle", "select", "expand", "collapse", "setValue", "defaultAction"]);
 
 const MAX_FIELD = 200;
-const MAX_MERGED_TEXT = 400;
+const MAX_LINK_VALUE = 100;
+const MAX_MERGED_TEXT = 600;
 
 export function clean(text: string | undefined, max = MAX_FIELD): string {
   if (!text) return "";
@@ -74,12 +78,13 @@ export function clean(text: string | undefined, max = MAX_FIELD): string {
 }
 
 export function roleLabel(node: StateNode): string {
+  // Localized names follow the OS language, so only use them where the control type
+  // says nothing (Custom), or for web headings.
   const localized = node.localizedRole?.trim().toLowerCase();
   if (localized && localized.length <= 24) {
-    if (node.role === "Custom" || node.role === "Group") return localized;
+    if (node.role === "Custom") return localized;
     if (node.role === "Text" && localized.includes("heading")) return "heading";
   }
-  if (node.role === "Window" && node.parentIndex !== null) return "dialog";
   return ROLE_LABELS[node.role] ?? node.role.toLowerCase();
 }
 
@@ -113,6 +118,8 @@ function meaningfulId(node: StateNode): string | undefined {
   const id = node.automationId?.trim();
   if (!id || id.length > 48 || id === node.name) return undefined;
   if (/^[\d\s:._-]*$/.test(id) || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) return undefined;
+  // Generated ids carry no meaning (Chromium views, React, numbered wrappers).
+  if (/^(view_|mw)[\w-]*$|^:r[\w]*:$|^[a-z]+[_-]?\d+$/i.test(id) && !/[a-z]{3,}[_-][a-z]{3,}/i.test(id)) return undefined;
   return id;
 }
 
@@ -123,7 +130,7 @@ export function renderLine(node: StateNode, nameOverride?: string): string {
   if (states.length) head += ` (${states.join(", ")})`;
   if (name) head += ` ${name}`;
   const extras: string[] = [];
-  const value = clean(node.value);
+  const value = clean(node.value, node.role === "Hyperlink" ? MAX_LINK_VALUE : MAX_FIELD);
   if (value && value !== name) extras.push(`Value: ${value}`);
   if (node.range && !value) extras.push(`Value: ${node.range.value} (${node.range.min}–${node.range.max})`);
   const help = clean(node.helpText);
@@ -139,21 +146,86 @@ export function renderLine(node: StateNode, nameOverride?: string): string {
 type Disposition = "keep" | "hoist" | "drop";
 
 function dispose(node: StateNode, parent: StateNode | undefined, next: StateNode | undefined): Disposition {
-  if (DROPPED_ROLES.has(node.role)) return "drop";
+  if (DROPPED_ROLES.has(node.role) || (node.automationId && DROPPED_IDS.has(node.automationId))) return "drop";
   const name = clean(node.name);
+  // Invisible: no size, no name, nothing inside (hidden web elements, placeholders).
+  if (node.rect.width <= 0 && node.rect.height <= 0 && !name && !node.value && node.children.length === 0 && !node.focused) return "drop";
   if (node.role === "Text" && !name && !node.value) return "drop";
   if (node.role === "Image" && !name && !isInteractive(node)) return "drop";
   if (node.role === "Text" && name && parent && clean(parent.name) === name) return "drop";
   // A form label followed by the control it names: the control line carries the name.
   if (node.role === "Text" && name && next && LABELLED_CONTROLS.has(next.role) && clean(next.name) === name) return "drop";
-  if (CONTAINER_ROLES.has(node.role) && !node.focused && !node.value && !isInteractive(node) && !node.scroll) {
-    if (!name || (parent && clean(parent.name) === name)) return "hoist";
+  if (CONTAINER_ROLES.has(node.role) && !node.focused && !node.value && !node.scroll) {
+    const actionable = node.actions.some((action) => INTERACTIVE_ACTIONS.has(action));
+    if (!name && !actionable && node.children.length === 0) return "drop";
+    if (!actionable && !node.focusable && (!name || (parent && clean(parent.name) === name))) return "hoist";
   }
   return "keep";
 }
 
 function isPlainText(node: StateNode): boolean {
-  return node.role === "Text" && node.children.length === 0 && !isInteractive(node) && !node.focused && !!clean(node.name);
+  return (
+    node.role === "Text" && node.children.length === 0 && !isInteractive(node) && !node.focused &&
+    !!clean(node.name) && !meaningfulId(node)
+  );
+}
+
+/** A link whose subtree is just its own label: it can be written inline in a sentence. */
+function isInlineLink(node: StateNode): boolean {
+  return (
+    node.role === "Hyperlink" && !!clean(node.name) && !node.focused &&
+    node.children.every((child) => (child.role === "Text" || child.role === "Image") && child.children.length === 0)
+  );
+}
+
+function joinText(left: string, right: string): string {
+  if (!left) return right;
+  return /^[.,;:!?)\]]/.test(right) ? `${left}${right}` : `${left} ${right}`;
+}
+
+/**
+ * Merge a run of plain text and inline links (a paragraph split into pieces, as web
+ * pages are) into one line: "For uses, see [Personal computer](#87)." Returns the
+ * position after the run, or `start` when no merge applies.
+ */
+function mergeRun(children: StateNode[], start: number, parent: StateNode, depth: number, lines: ViewLine[]): number {
+  let end = start;
+  let texts = 0;
+  while (end < children.length) {
+    const child = children[end]!;
+    if (isPlainText(child)) texts++;
+    else if (!isInlineLink(child)) break;
+    end++;
+  }
+  if (texts === 0 || end - start < 2) {
+    const only = children[start]!;
+    if (!isPlainText(only)) return start;
+    end = start + 1;
+  }
+  let position = start;
+  while (position < end) {
+    const first = children[position]!;
+    let text = "";
+    const inline: StateNode[] = [];
+    while (position < end && text.length < MAX_MERGED_TEXT) {
+      const piece = children[position]!;
+      if (dispose(piece, parent, children[position + 1]) === "drop") {
+        position++;
+        continue;
+      }
+      if (piece.role === "Hyperlink") {
+        inline.push(piece);
+        text = joinText(text, `[${clean(piece.name, 120)}](#${piece.index})`);
+      } else {
+        text = joinText(text, clean(piece.name, MAX_MERGED_TEXT));
+      }
+      position++;
+    }
+    if (!text) continue;
+    const anchor = first;
+    lines.push({ index: anchor.index, depth, text: `${anchor.index} text ${clean(text, MAX_MERGED_TEXT + 200)}`, node: anchor, ...(inline.length ? { inline } : {}) });
+  }
+  return end;
 }
 
 function walk(node: StateNode, depth: number, lines: ViewLine[]): void {
@@ -166,16 +238,9 @@ function walk(node: StateNode, depth: number, lines: ViewLine[]): void {
       walk(child, depth, lines);
       continue;
     }
-    if (isPlainText(child)) {
-      // Merge a run of plain text siblings into one line under the first index.
-      let text = clean(child.name, MAX_MERGED_TEXT);
-      while (i + 1 < children.length && isPlainText(children[i + 1]!) && text.length < MAX_MERGED_TEXT) {
-        const sibling = children[i + 1]!;
-        if (dispose(sibling, node, children[i + 2]) === "drop") break;
-        text = clean(`${text} ${sibling.name}`, MAX_MERGED_TEXT);
-        i++;
-      }
-      lines.push({ index: child.index, depth, text: renderLine(child, text), node: child });
+    const after = mergeRun(children, i, node, depth, lines);
+    if (after > i) {
+      i = after - 1;
       continue;
     }
     lines.push({ index: child.index, depth, text: renderLine(child), node: child });

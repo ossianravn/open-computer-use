@@ -72,7 +72,7 @@ class WindowsPlatform implements Platform {
     // ShellExecute (Start-Process) also finds programs registered under App Paths.
     await run(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", "& { Start-Process -FilePath $args[0] }", app.program],
+      ["-NoProfile", "-NonInteractive", "-Command", "& { Start-Process -FilePath $args[0] -ErrorAction Stop }", app.program],
       { windowsHide: true, timeout: 20_000 },
     ).catch((error: Error) => {
       throw new ToolError("launch_failed", `Could not start ${app.program}: ${error.message.split("\n")[0]}`);

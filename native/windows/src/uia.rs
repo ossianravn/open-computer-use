@@ -24,6 +24,9 @@ const MAX_RETAINED_WINDOWS: usize = 32;
 pub struct Session {
     automation: IUIAutomation,
     control_view: IUIAutomationCacheRequest,
+    /// Control view without offscreen elements: the provider skips serializing them,
+    /// which matters for long web pages.
+    onscreen_view: IUIAutomationCacheRequest,
     raw_view: IUIAutomationCacheRequest,
     single: IUIAutomationCacheRequest,
     snapshots: HashMap<i64, Snapshot>,
@@ -587,9 +590,15 @@ impl Session {
                 let _ = automation2.SetTransactionTimeout(8000);
             }
             let control_view = cache_request(&automation, TreeScope_Subtree, Some(automation.ControlViewCondition()?))?;
+            let mut onscreen = VARIANT::default();
+            (*onscreen.Anonymous.Anonymous).vt = VT_BOOL;
+            (*onscreen.Anonymous.Anonymous).Anonymous.boolVal = windows::Win32::Foundation::VARIANT_BOOL(0);
+            let not_offscreen = automation.CreatePropertyCondition(UIA_IsOffscreenPropertyId, &onscreen)?;
+            let onscreen_condition = automation.CreateAndCondition(&automation.ControlViewCondition()?, &not_offscreen)?;
+            let onscreen_view = cache_request(&automation, TreeScope_Subtree, Some(onscreen_condition))?;
             let raw_view = cache_request(&automation, TreeScope_Subtree, Some(automation.RawViewCondition()?))?;
             let single = cache_request(&automation, TreeScope_Element, None)?;
-            Ok(Self { automation, control_view, raw_view, single, snapshots: HashMap::new(), next_snapshot: 1 })
+            Ok(Self { automation, control_view, onscreen_view, raw_view, single, snapshots: HashMap::new(), next_snapshot: 1 })
         }
     }
 
@@ -597,7 +606,13 @@ impl Session {
         let params: SnapshotParams = parse(params)?;
         let hwnd = ensure_window(params.hwnd)?;
         let started = Instant::now();
-        let request = if params.raw { &self.raw_view } else { &self.control_view };
+        let request = if params.raw {
+            &self.raw_view
+        } else if params.include_offscreen {
+            &self.control_view
+        } else {
+            &self.onscreen_view
+        };
         let root = unsafe { self.automation.ElementFromHandleBuildCache(hwnd, request)? };
 
         let mut nodes: Vec<Node> = Vec::new();

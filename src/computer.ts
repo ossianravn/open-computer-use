@@ -140,7 +140,17 @@ export class Computer {
   }
 
   private async refresh(state: WindowState, includeOffscreen = false): Promise<View> {
-    const snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
+    let snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
+    // Chromium (Chrome, Edge, Electron apps) builds its page tree only once an
+    // accessibility client asks; the first read shows browser chrome alone.
+    if (state.snapshotId === 0 && snapshot.window.className.startsWith("Chrome_WidgetWin")) {
+      const hasPage = (nodes: typeof snapshot.nodes) =>
+        nodes.some((node) => node.role === "Document" && nodes.some((child) => child.parent === node.id));
+      for (let attempt = 0; attempt < 8 && !hasPage(snapshot.nodes); attempt++) {
+        await sleep(250);
+        snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
+      }
+    }
     state.update(snapshot);
     const view = buildView(state);
     this.views.set(state.hwnd, view);
@@ -374,7 +384,12 @@ export class Computer {
     const installed = await this.platform.installedApps();
     const lower = name.toLowerCase();
     const matches = installed.filter((app) => app.name.toLowerCase() === lower || app.id.toLowerCase() === lower);
-    const loose = matches.length ? matches : installed.filter((app) => app.name.toLowerCase().includes(lower));
+    // Start-menu names are localized ("Lommeregner"); package ids are not ("Microsoft.WindowsCalculator…").
+    const compact = lower.replace(/\s+/g, "");
+    const byId = (app: { id: string }) => (app.id.split("!")[0] ?? "").toLowerCase().split(/[._]/).some((part) => part === compact || part === `windows${compact}`);
+    const loose = matches.length
+      ? matches
+      : installed.filter((app) => app.name.toLowerCase().includes(lower)).concat(installed.filter((app) => !app.name.toLowerCase().includes(lower) && byId(app)));
     const program = aliasExe(name) ?? (/\.exe$/i.test(name) ? name : `${name}.exe`);
     const fake: WindowInfo = {
       hwnd: 0, title: name, className: "", pid: 0, processName: program, exePath: null,

@@ -84,9 +84,11 @@ function position(node: StateNode, state: WindowState): string {
 }
 
 function context(node: StateNode, state: WindowState): string {
+  const title = clean(state.window.title);
   return state
     .ancestors(node)
-    .filter((ancestor) => clean(ancestor.name))
+    // The window's own name (and browser panes repeating it) says nothing new.
+    .filter((ancestor) => clean(ancestor.name) && !title.startsWith(clean(ancestor.name)))
     .slice(0, 3)
     .map((ancestor) => `${roleLabel(ancestor)} ${clean(ancestor.name, 60)}`)
     .join(" › ");
@@ -121,17 +123,16 @@ function lexicalScore(target: string, candidate: Omit<Candidate, "lexical">): nu
 export function candidatesFor(state: WindowState, view: View, target: string, purpose: Purpose): Candidate[] {
   const seen = new Set<number>();
   const candidates: Candidate[] = [];
-  for (const line of view.lines) {
-    const node = line.node;
-    if (seen.has(node.index) || !wantsNode(node, purpose)) continue;
+  const add = (node: StateNode, text: string) => {
+    if (seen.has(node.index) || !wantsNode(node, purpose)) return;
     seen.add(node.index);
-    const base = {
-      node,
-      description: line.text.slice(line.text.indexOf(" ") + 1),
-      context: context(node, state),
-      position: position(node, state),
-    };
+    const base = { node, description: text.slice(text.indexOf(" ") + 1), context: context(node, state), position: position(node, state) };
     candidates.push({ ...base, lexical: lexicalScore(target, base) });
+  };
+  for (const line of view.lines) {
+    add(line.node, line.text);
+    // Links written inline in a text line are targets of their own.
+    for (const link of line.inline ?? []) add(link, renderLine(link));
   }
   return candidates;
 }
