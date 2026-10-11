@@ -1,4 +1,4 @@
-import { type Config, updateApprovedApps } from "./config.ts";
+import { type Config, cliCommand, configPath, updateApprovedApps } from "./config.ts";
 import { ToolError } from "./errors.ts";
 import type { WindowInfo } from "./protocol.ts";
 
@@ -52,7 +52,7 @@ export function blockReason(window: WindowInfo, config: Config): BlockReason | u
   const className = window.className.toLowerCase();
   const refuse = (why: string): BlockReason => ({
     code: "app_blocked",
-    message: `open-computer-use is not allowed to use ${window.processName || window.title} (${why}). Ask the user to do this step themselves.`,
+    message: `open-cu is not allowed to use ${window.processName || window.title} (${why}). Ask the user to do this step themselves.`,
   });
   if (TERMINAL_PROCESSES.includes(exe) || TERMINAL_WINDOW_CLASSES.includes(className)) {
     return refuse("terminals are never driven; use your own shell tool, where the user's permissions apply");
@@ -129,8 +129,8 @@ export class Approvals {
     }
     throw new ToolError(
       "app_not_approved",
-      `open-computer-use needs the user's permission to use ${app.label}. Ask the user to approve it by running ` +
-        `\`open-computer-use approve ${app.exe}\` (or adding "${app.exe}" to approvedApps in ~/.open-computer-use/config.json), then retry.`,
+      `open-cu needs the user's permission to use ${app.label}. Ask the user to approve it by running ` +
+        `\`${cliCommand()} approve ${app.exe}\` (or adding "${app.exe}" to approvedApps in ${configPath()}), then retry.`,
     );
   }
 }

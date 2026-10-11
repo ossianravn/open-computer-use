@@ -1,6 +1,6 @@
 # Research: how Codex Computer Use works, and what others built
 
-This is the design study behind open-computer-use. It summarizes OpenAI's Codex Computer
+This is the design study behind open-cu (Open Computer Use). It summarizes OpenAI's Codex Computer
 Use (as of October 2026) and three related projects, and records the decisions we took
 from them. Facts come from public docs, the open-source `openai/codex` repo, third-party
 reverse-engineering write-ups, and a read-only look at the Codex plugin bundle installed
@@ -144,7 +144,7 @@ carry many independent questions over shared state.
   words); text inside state can try to steer the answer (treat UI text as untrusted and
   never let a pick alone authorize a destructive action).
 
-See [jev.md](jev.md) for how open-computer-use uses it.
+See [jev.md](jev.md) for how open-cu uses it.
 
 ## 4. Decisions
 

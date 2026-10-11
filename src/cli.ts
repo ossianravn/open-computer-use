@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// open-computer-use: MCP server and command line.
+// open-cu: MCP server and command line.
 //
-//   open-computer-use mcp [--jev]                 run the MCP server on stdio
-//   open-computer-use doctor [--jev]              check the helper, guard, approvals and Jev
-//   open-computer-use apps [--installed]          list running (and installed) apps
-//   open-computer-use state <app> [--window id] [--query words] [--screenshot file.jpg] [--offscreen]
-//   open-computer-use find <app> <description…> [--jev]
-//   open-computer-use call <tool> '<json args>' [--jev]   run any MCP tool once
-//   open-computer-use approve <app.exe> | revoke <app.exe> | config
+//   open-cu mcp [--jev]                 run the MCP server on stdio
+//   open-cu doctor [--jev]              check the helper, guard, approvals and Jev
+//   open-cu apps [--installed]          list running (and installed) apps
+//   open-cu state <app> [--window id] [--query words] [--screenshot file.jpg] [--offscreen]
+//   open-cu find <app> <description…> [--jev]
+//   open-cu call <tool> '<json args>' [--jev]   run any MCP tool once
+//   open-cu approve <app.exe> | revoke <app.exe> | config
 //
 // Element indices survive between CLI calls: identities are kept in a temp file.
 
@@ -42,7 +42,7 @@ function parseArgs(argv: string[]): Flags {
   return { positional, options };
 }
 
-const identityFile = join(tmpdir(), "open-computer-use", "identities.json");
+const identityFile = join(tmpdir(), "open-cu", "identities.json");
 
 function loadIdentities(): Map<number, IdentityMap> {
   try {
@@ -56,7 +56,7 @@ function loadIdentities(): Map<number, IdentityMap> {
 async function saveIdentities(computer: Computer): Promise<void> {
   const live = new Set((await computer.platform.helper.call("listWindows", { includeAll: true })).map((w) => w.hwnd));
   const data = Object.fromEntries([...computer.identityMaps].filter(([hwnd]) => live.has(hwnd)).map(([hwnd, map]) => [hwnd, map.toJSON()]));
-  mkdirSync(join(tmpdir(), "open-computer-use"), { recursive: true });
+  mkdirSync(join(tmpdir(), "open-cu"), { recursive: true });
   writeFileSync(identityFile, JSON.stringify(data));
 }
 
@@ -69,19 +69,19 @@ function print(output: ToolOutput, screenshotPath?: string): void {
   }
 }
 
-const USAGE = `open-computer-use ${VERSION}
+const USAGE = `open-cu ${VERSION}
 
 Usage:
-  open-computer-use mcp [--jev]              Run the MCP server on stdio
-  open-computer-use doctor [--jev]           Check the helper, input guard, approvals and Jev
-  open-computer-use apps [--installed]       List running apps and their windows
-  open-computer-use state <app> [--window <id>] [--query <words>] [--screenshot <file.jpg>] [--offscreen]
-  open-computer-use find <app> <description...>
-  open-computer-use call <tool> '<json args>'   Run one tool, e.g. call click '{"app":"notepad","target":"File menu"}'
-  open-computer-use call <tool> -               Same, reading the JSON arguments from stdin
-  open-computer-use approve <app.exe>        Always allow an app
-  open-computer-use revoke <app.exe>         Remove an app from the allow list
-  open-computer-use config                   Show the config file path and contents
+  open-cu mcp [--jev]              Run the MCP server on stdio
+  open-cu doctor [--jev]           Check the helper, input guard, approvals and Jev
+  open-cu apps [--installed]       List running apps and their windows
+  open-cu state <app> [--window <id>] [--query <words>] [--screenshot <file.jpg>] [--offscreen]
+  open-cu find <app> <description...>
+  open-cu call <tool> '<json args>'   Run one tool, e.g. call click '{"app":"notepad","target":"File menu"}'
+  open-cu call <tool> -               Same, reading the JSON arguments from stdin
+  open-cu approve <app.exe>        Always allow an app
+  open-cu revoke <app.exe>         Remove an app from the allow list
+  open-cu config                   Show the config file path and contents
 
 Flags: --jev / --no-jev turn Jev targeting on or off for this run.`;
 
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
     case "approve":
     case "revoke": {
       const exe = rest[0]?.toLowerCase();
-      if (!exe) throw new Error(`Usage: open-computer-use ${command} <app.exe>`);
+      if (!exe) throw new Error(`Usage: open-cu ${command} <app.exe>`);
       const name = exe.endsWith(".exe") ? exe : `${exe}.exe`;
       const apps = updateApprovedApps((list) => (command === "approve" ? [...new Set([...list, name])] : list.filter((app) => app !== name)));
       console.log(`Approved apps: ${apps.join(", ") || "none"}`);

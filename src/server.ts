@@ -13,7 +13,7 @@ export const VERSION = "0.1.0";
 
 function instructions(jevOn: boolean): string {
   return [
-    "open-computer-use operates desktop apps on the user's computer through their accessibility tree, the way Codex Computer Use does.",
+    "open-cu operates desktop apps on the user's computer through their accessibility tree, the way Codex Computer Use does.",
     "Workflow: list_apps → get_app_state(app) → act on element indices with click, set_value, type_text, press_key, scroll or perform_secondary_action.",
     "Element indices stay valid while the element exists. Actions return only what changed; call get_app_state for the full view.",
     "Prefer element_index or target over coordinates. Coordinates are pixels in the latest screenshot (get_app_state with include_screenshot=true).",
@@ -81,13 +81,13 @@ const expect = (jevOn: boolean) =>
 export function createServer(config: Config): { server: McpServer; computer: Computer } {
   const jev = new Jev(config.jev);
   const jevOn = config.jev.enabled;
-  const server = new McpServer({ name: "open-computer-use", version: VERSION }, { instructions: instructions(jevOn) });
+  const server = new McpServer({ name: "open-cu", version: VERSION }, { instructions: instructions(jevOn) });
 
   const askUser: AskUser = async (identity) => {
     if (!server.server.getClientCapabilities()?.elicitation) return undefined;
     const result = await server.server.elicitInput(
       {
-        message: `Allow open-computer-use to control ${identity.label} (${identity.exe})? The agent will be able to read its window and click and type in it.`,
+        message: `Allow open-cu to control ${identity.label} (${identity.exe})? The agent will be able to read its window and click and type in it.`,
         requestedSchema: {
           type: "object",
           properties: {

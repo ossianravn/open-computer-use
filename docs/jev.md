@@ -3,7 +3,7 @@
 Most of an agent's computer-use time goes into reading. To click "Save", it fetches a
 tree that can run to thousands of tokens, finds the right line, and then makes another
 call. TypeSafe's [Jev](https://docs.typesafe.ai) is a "System One" model: it returns
-typed judgments with probabilities in a few hundred milliseconds. open-computer-use uses
+typed judgments with probabilities in a few hundred milliseconds. open-cu uses
 it to resolve a description to an element on the server side, so the agent can act in
 one call:
 
@@ -93,7 +93,7 @@ tuned on labelled traces from real use.
    `jev.envFile`, `OCU_ENV_FILE` or `JEV_9000_ENV_FILE`. The JEV 9000 plugin's file works
    as is.
 3. **Turn Jev on** with `--jev`, `OCU_JEV=1` or `"jev": {"enabled": true}`.
-4. **Check it.** `open-computer-use doctor --jev` prints `Jev: ready (model …)`.
+4. **Check it.** `open-cu doctor --jev` prints `Jev: ready (model …)`.
 
 Settings, under `jev` in the config:
 

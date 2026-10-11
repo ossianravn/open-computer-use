@@ -1,6 +1,6 @@
-# open-computer-use
+# open-cu
 
-Open, agent-agnostic computer use. Any agent that speaks MCP (Claude Code, Codex,
+Open Computer Use: open, agent-agnostic computer use. Any agent that speaks MCP (Claude Code, Codex,
 Cursor, Gemini CLI and others), or that can run a shell command, can read and operate
 desktop apps through their accessibility tree, the way OpenAI's Codex Computer Use does.
 None of OpenAI's code is used.
@@ -32,10 +32,10 @@ window, is not DPI-aware, and spends hundreds of thousands of tokens on a simple
 because every action returns the full tree plus a screenshot. [docs/research.md](docs/research.md)
 has the full study.
 
-open-computer-use keeps Codex's tool names and text format, so prompts and model habits
+open-cu keeps Codex's tool names and text format, so prompts and model habits
 carry over, and changes what is underneath:
 
-| | open-computer-use |
+| | open-cu |
 |---|---|
 | Native layer | A persistent Rust helper using UI Automation COM, one cached request per snapshot. Takes 50 ms on a form and 145 ms on a long Wikipedia article. |
 | Element indices | Stable for as long as an element exists, keyed by its UIA runtime id. Old indices keep working after a refresh. |
@@ -64,6 +64,9 @@ node dist/cli.mjs doctor
 
 `doctor` checks the helper, the input guard, approvals and Jev.
 
+To get an `open-cu` command on your PATH (used below for approvals), run `npm link` in
+the repo. Without it, use `node <repo>/dist/cli.mjs` wherever `open-cu` appears.
+
 ### Connect an agent
 
 Every agent runs the same stdio MCP server, `node <repo>/dist/cli.mjs mcp`. Add `--jev`
@@ -72,13 +75,13 @@ to turn on Jev targeting.
 **Claude Code**
 
 ```bash
-claude mcp add open-computer-use --scope user -- node C:/path/to/open-computer-use/dist/cli.mjs mcp --jev
+claude mcp add open-cu --scope user -- node C:/path/to/open-computer-use/dist/cli.mjs mcp --jev
 ```
 
 **Codex** (`~/.codex/config.toml`)
 
 ```toml
-[mcp_servers.open-computer-use]
+[mcp_servers.open-cu]
 command = "node"
 args = ["C:/path/to/open-computer-use/dist/cli.mjs", "mcp", "--jev"]
 ```
@@ -88,7 +91,7 @@ args = ["C:/path/to/open-computer-use/dist/cli.mjs", "mcp", "--jev"]
 ```json
 {
   "mcpServers": {
-    "open-computer-use": {
+    "open-cu": {
       "command": "node",
       "args": ["C:/path/to/open-computer-use/dist/cli.mjs", "mcp", "--jev"],
       "env": { "JEV_9000_ENV_FILE": "C:/Users/you/.jev-9000/config.env" }
@@ -108,7 +111,7 @@ node dist/cli.mjs call click '{"app":"notepad","target":"File menu"}'
 ```
 
 Agents get usage guidance from the server's MCP instructions. For hosts with skills
-(Claude Code, Codex), install [skills/open-computer-use/SKILL.md](skills/open-computer-use/SKILL.md) too.
+(Claude Code, Codex), install [skills/open-cu/SKILL.md](skills/open-cu/SKILL.md) too.
 
 ## Tools
 
@@ -147,7 +150,7 @@ Every action tool also accepts:
 
 ## Jev targeting
 
-The agent describes the element; open-computer-use finds it:
+The agent describes the element; open-cu finds it:
 
 1. **Exact name.** If exactly one element is named what the agent wrote ("Submit",
    "Submit button"), it is used. No model is called.
@@ -181,8 +184,8 @@ See [docs/jev.md](docs/jev.md).
 
 - **Per-app approval.** The first use of an app asks the user through MCP elicitation:
   allow for the session, always allow, or deny. Clients that cannot ask get an error that
-  tells the user how to approve: `open-computer-use approve notepad.exe`, or `approvedApps`
-  in `~/.open-computer-use/config.json`. Agents have no tool to approve apps.
+  tells the user how to approve: `open-cu approve notepad.exe`, or `approvedApps`
+  in `~/.open-cu/config.json`. Agents have no tool to approve apps.
 - **Hard blocks** that no setting overrides:
   - terminals (by window class, so GUI apps hosted by a shell still work);
   - password managers;
@@ -199,7 +202,7 @@ See [docs/jev.md](docs/jev.md).
 
 ## Configuration
 
-`~/.open-computer-use/config.json` (or `OCU_CONFIG`):
+`~/.open-cu/config.json` (or `OCU_CONFIG`):
 
 ```json
 {

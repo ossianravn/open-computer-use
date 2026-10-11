@@ -1,7 +1,7 @@
 {
-  "name": "@ossianravn/open-computer-use",
+  "name": "@ossianravn/open-cu",
   "version": "0.1.0",
-  "description": "Open, agent-agnostic computer use over MCP: drive desktop apps through the accessibility tree, with optional TypeSafe Jev targeting.",
+  "description": "open-cu (Open Computer Use): open, agent-agnostic computer use over MCP: drive desktop apps through the accessibility tree, with optional TypeSafe Jev targeting.",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -10,7 +10,7 @@
   },
   "keywords": ["mcp", "computer-use", "ui-automation", "accessibility", "agents", "codex", "claude", "jev", "typesafe"],
   "bin": {
-    "open-computer-use": "dist/cli.mjs"
+    "open-cu": "dist/cli.mjs"
   },
   "engines": {
     "node": ">=22.18.0"

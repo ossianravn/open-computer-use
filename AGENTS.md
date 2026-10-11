@@ -1,4 +1,4 @@
-# Working on open-computer-use
+# Working on open-cu
 
 An MCP server and CLI (TypeScript, `src/`) over a native platform helper (Rust,
 `native/windows/`). Read [docs/architecture.md](docs/architecture.md) before changing the
@@ -17,6 +17,11 @@ helper protocol, the state model or the rendering.
 | `cargo test --manifest-path native/windows/Cargo.toml` | Rust unit tests. |
 | `node src/cli.ts <command>` | Run from source; Node 22.18+ strips types. |
 
+Installed MCP servers run `dist/cli.mjs` and `native/windows/bin/ocu-win.exe`. After
+changing `src/`, run `npm run build:js`; new agent sessions pick it up. A running
+session keeps `ocu-win.exe` open, so `npm run build:native` cannot replace it until
+those sessions end (or point `OCU_WINDOWS_HELPER` at another build).
+
 Write TypeScript as erasable syntax only (no enums, namespaces or parameter
 properties), because Node runs the sources directly. Use `.ts` extensions in imports.
 
@@ -29,7 +34,7 @@ properties), because Node runs the sources directly. Use `.ts` extensions in imp
   For web content, start a separate Chrome with a throwaway `--user-data-dir` and
   address it by window id.
 - Use a scratch config (`OCU_CONFIG=<temp>/config.json` with `{"approval":"off"}`) so
-  tests never write to `~/.open-computer-use`.
+  tests never write to `~/.open-cu`.
 - Calculator is a safe UWP target (`launch_app "Calculator"`); its labels follow the OS
   language.
 

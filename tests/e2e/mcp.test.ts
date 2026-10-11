@@ -72,7 +72,7 @@ test("asks for approval once, then reads the tree", { skip: !windows }, async ()
   const state = await call("get_app_state", { app: title });
   assert.equal(state.isError, false, state.text);
   assert.equal(prompts.length, 1);
-  assert.match(prompts[0]!, /Allow open-computer-use to control pwsh/);
+  assert.match(prompts[0]!, /Allow open-cu to control pwsh/);
   assert.match(state.text, /text field \((focused, )?settable, string\) Full name/);
   assert.match(state.text, /button Submit/);
   await call("get_app_state", { app: title });

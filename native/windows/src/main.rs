@@ -1,4 +1,4 @@
-//! ocu-win: the Windows platform helper for open-computer-use.
+//! ocu-win: the Windows platform helper for open-cu.
 //!
 //! Speaks newline-delimited JSON-RPC on stdio. One request per line:
 //!   {"id": 1, "method": "listWindows", "params": {}}

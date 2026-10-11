@@ -3,3 +3,4 @@ dist/
 native/windows/target/
 *.log
 .env
+native/windows/bin/

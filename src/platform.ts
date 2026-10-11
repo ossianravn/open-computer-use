@@ -88,6 +88,6 @@ export function createPlatform(): Platform {
   if (process.platform === "win32") return new WindowsPlatform();
   throw new ToolError(
     "unsupported_platform",
-    `open-computer-use has no helper for ${process.platform} yet. The helper protocol is documented in docs/architecture.md.`,
+    `open-cu has no helper for ${process.platform} yet. The helper protocol is documented in docs/architecture.md.`,
   );
 }

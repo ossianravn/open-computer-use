@@ -56,8 +56,14 @@ export const DEFAULT_CONFIG: Config = {
   },
 };
 
+/** How to run this CLI from a shell: the script itself when known, else the installed command. */
+export function cliCommand(): string {
+  const script = process.argv[1];
+  return script && /[\\/]cli\.(mjs|ts)$/.test(script) ? `node "${script}"` : "open-cu";
+}
+
 export function configPath(): string {
-  return process.env.OCU_CONFIG ?? join(homedir(), ".open-computer-use", "config.json");
+  return process.env.OCU_CONFIG ?? join(homedir(), ".open-cu", "config.json");
 }
 
 function readFileConfig(path: string): Partial<Config> {

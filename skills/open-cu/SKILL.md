@@ -1,9 +1,9 @@
 ---
-name: open-computer-use
-description: Operate desktop apps on the user's computer (click, type, read windows) through the open-computer-use MCP server (tools list_apps, get_app_state, click, set_value, type_text, press_key, scroll, perform_actions, find_element). Use for any task inside a native app or a browser window the user has open, when no purpose-built tool or API covers it.
+name: open-cu
+description: Operate desktop apps on the user's computer (click, type, read windows) through the open-cu MCP server (tools list_apps, get_app_state, click, set_value, type_text, press_key, scroll, perform_actions, find_element). Use for any task inside a native app or a browser window the user has open, when no purpose-built tool or API covers it.
 ---
 
-# open-computer-use
+# open-cu
 
 These tools act in the user's real apps, with their accounts and files. The user can
 see every action and can stop you with Esc.
