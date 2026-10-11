@@ -96,8 +96,13 @@ export function createServer(config: Config): { server: McpServer; computer: Com
             access: {
               type: "string",
               title: "Access",
-              enum: ["session", "always", "deny"],
-              enumNames: ["Allow while this session runs", "Always allow", "Deny"],
+              enum: ["session", "always", "all", "deny"],
+              enumNames: [
+                "Allow while this session runs",
+                `Always allow ${identity.label}`,
+                "Always allow every app (blocked apps stay blocked)",
+                "Deny",
+              ],
               default: "session",
             },
           },
@@ -108,7 +113,7 @@ export function createServer(config: Config): { server: McpServer; computer: Com
     );
     if (result.action !== "accept") return "deny";
     const access = result.content?.access;
-    return access === "session" || access === "always" ? (access as ApprovalDecision) : "deny";
+    return access === "session" || access === "always" || access === "all" ? (access as ApprovalDecision) : "deny";
   };
 
   const computer = new Computer({ config, platform: createPlatform(), jev, askUser });

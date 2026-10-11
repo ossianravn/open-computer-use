@@ -183,9 +183,13 @@ See [docs/jev.md](docs/jev.md).
 ## Safety
 
 - **Per-app approval.** The first use of an app asks the user through MCP elicitation:
-  allow for the session, always allow, or deny. Clients that cannot ask get an error that
-  tells the user how to approve: `open-cu approve notepad.exe`, or `approvedApps`
-  in `~/.open-cu/config.json`. Agents have no tool to approve apps.
+  allow for the session, always allow this app, always allow every app, or deny. Clients
+  that cannot ask get an error that tells the user how to approve:
+  `open-cu approve notepad.exe`, or `approvedApps` in `~/.open-cu/config.json`. Agents
+  have no tool to approve apps.
+- **Approve everything.** `open-cu approval all` (or `"approval": "all"` in the
+  config) approves every app; `open-cu approval prompt` goes back to asking. The hard
+  blocks below still apply.
 - **Hard blocks** that no setting overrides:
   - terminals (by window class, so GUI apps hosted by a shell still work);
   - password managers;
@@ -220,7 +224,7 @@ Environment overrides:
 
 | Variable | Values |
 |---|---|
-| `OCU_APPROVAL` | `prompt`, `allowlist`, `off` |
+| `OCU_APPROVAL` | `prompt`, `allowlist`, `all` |
 | `OCU_SCREENSHOTS` | `auto`, `always`, `never` |
 | `OCU_JEV` | `1` or `0` |
 | `OCU_JEV_MODEL` | a Jev model id |

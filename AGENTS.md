@@ -33,7 +33,7 @@ properties), because Node runs the sources directly. Use `.ts` extensions in imp
 - Do not drive the user's own windows (their browser profile, editors, mail) in tests.
   For web content, start a separate Chrome with a throwaway `--user-data-dir` and
   address it by window id.
-- Use a scratch config (`OCU_CONFIG=<temp>/config.json` with `{"approval":"off"}`) so
+- Use a scratch config (`OCU_CONFIG=<temp>/config.json` with `{"approval":"all"}`) so
   tests never write to `~/.open-cu`.
 - Calculator is a safe UWP target (`launch_app "Calculator"`); its labels follow the OS
   language.

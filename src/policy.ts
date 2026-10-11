@@ -1,4 +1,4 @@
-import { type Config, configPath, updateApprovedApps } from "./config.ts";
+import { type Config, configPath, setApprovalMode, updateApprovedApps } from "./config.ts";
 import { ToolError } from "./errors.ts";
 import type { WindowInfo } from "./protocol.ts";
 
@@ -83,7 +83,8 @@ export function assertKeyAllowed(key: string): void {
   }
 }
 
-export type ApprovalDecision = "session" | "always" | "deny";
+/** "all" approves every app from now on (the user chose it in the prompt). */
+export type ApprovalDecision = "session" | "always" | "all" | "deny";
 
 /** Ask the user (via MCP elicitation) whether to allow an app. Undefined when the client cannot ask. */
 export type AskUser = (app: AppIdentity, window: WindowInfo) => Promise<ApprovalDecision | undefined>;
@@ -105,7 +106,7 @@ export class Approvals {
 
   isApproved(app: AppIdentity): boolean {
     return (
-      this.config.approval === "off" ||
+      this.config.approval === "all" ||
       this.session.has(app.exe) ||
       this.config.approvedApps.some((name) => name.toLowerCase() === app.exe)
     );
@@ -116,6 +117,11 @@ export class Approvals {
     if (this.isApproved(app)) return;
     if (this.config.approval === "prompt" && this.askUser) {
       const decision = await this.askUser(app, window);
+      if (decision === "all") {
+        this.config.approval = "all";
+        setApprovalMode("all");
+        return;
+      }
       if (decision === "session" || decision === "always") {
         this.session.add(app.exe);
         if (decision === "always") {
@@ -130,7 +136,7 @@ export class Approvals {
     throw new ToolError(
       "app_not_approved",
       `open-cu needs the user's permission to use ${app.label}. Ask the user to approve it by running ` +
-        `\`open-cu approve ${app.exe}\` (or adding "${app.exe}" to approvedApps in ${configPath()}), then retry.`,
+        `\`open-cu approve ${app.exe}\` (or \`open-cu approval all\` to approve every app), then retry. Settings: ${configPath()}.`,
     );
   }
 }

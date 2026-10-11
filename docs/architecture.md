@@ -137,7 +137,8 @@ between steps, and returns one diff against the state before the batch.
   agent apps unless `allowAgentApps` is set.
 - **Keys:** no Windows-key chords and no Ctrl+Alt+Delete.
 - **Approval:** `prompt` (MCP elicitation when the client supports it, else an
-  allowlist error that says how to approve), `allowlist`, or `off`. "Always" answers are
+  allowlist error that says how to approve), `allowlist`, or `all` (every app; `off` is an
+  accepted older name). "Always" answers are
   written to the config file. There is no tool for approving apps.
 - **Input guard (helper):** physical Esc latches a stop (20 s by default). Physical key
   or mouse-button activity within 700 ms makes input calls fail with `user_active`.

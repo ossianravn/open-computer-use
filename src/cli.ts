@@ -7,7 +7,7 @@
 //   open-cu state <app> [--window id] [--query words] [--screenshot file.jpg] [--offscreen]
 //   open-cu find <app> <description…> [--jev]
 //   open-cu call <tool> '<json args>' [--jev]   run any MCP tool once
-//   open-cu approve <app.exe> | revoke <app.exe> | config
+//   open-cu approve <app.exe> | revoke <app.exe> | approval [prompt|allowlist|all] | config
 //
 // Element indices survive between CLI calls: identities are kept in a temp file.
 
@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Computer, type ToolOutput } from "./computer.ts";
-import { configPath, loadConfig, updateApprovedApps } from "./config.ts";
+import { APPROVAL_MODES, configPath, loadConfig, parseApprovalMode, setApprovalMode, updateApprovedApps } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { Jev } from "./jev.ts";
 import { createPlatform } from "./platform.ts";
@@ -81,6 +81,7 @@ Usage:
   open-cu call <tool> -               Same, reading the JSON arguments from stdin
   open-cu approve <app.exe>        Always allow an app
   open-cu revoke <app.exe>         Remove an app from the allow list
+  open-cu approval [prompt|allowlist|all]   Show or set how apps get approved ("all" approves every app)
   open-cu config                   Show the config file path and contents
 
 Flags: --jev / --no-jev turn Jev targeting on or off for this run.`;
@@ -102,6 +103,22 @@ async function main(): Promise<void> {
       const name = exe.endsWith(".exe") ? exe : `${exe}.exe`;
       const apps = updateApprovedApps((list) => (command === "approve" ? [...new Set([...list, name])] : list.filter((app) => app !== name)));
       console.log(`Approved apps: ${apps.join(", ") || "none"}`);
+      return;
+    }
+    case "approval": {
+      if (!rest[0]) {
+        console.log(`Approval mode: ${config.approval}`);
+        return;
+      }
+      const mode = parseApprovalMode(rest[0]);
+      if (!mode) throw new Error(`Usage: open-cu approval <${APPROVAL_MODES.join("|")}>`);
+      setApprovalMode(mode);
+      const meaning = {
+        prompt: "ask the first time each app is used",
+        allowlist: "only apps approved with `open-cu approve`",
+        all: "every app is approved; terminals, password managers and security tools stay blocked",
+      }[mode];
+      console.log(`Approval mode: ${mode} (${meaning}).`);
       return;
     }
     case "config":

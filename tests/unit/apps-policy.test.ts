@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { matchScore, parseWindowId, resolveWindow } from "../../src/apps.ts";
-import { DEFAULT_CONFIG } from "../../src/config.ts";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_CONFIG, loadConfig, parseApprovalMode } from "../../src/config.ts";
 import { ToolError } from "../../src/errors.ts";
 import { Approvals, assertKeyAllowed, blockReason } from "../../src/policy.ts";
 import { windowInfo } from "./helpers.ts";
@@ -71,4 +74,39 @@ test("approval asks the user once per session and honours a denial", async () =>
 
   const silent = new Approvals(structuredClone(DEFAULT_CONFIG), async () => undefined);
   await assert.rejects(silent.ensure(notepad), /`open-cu approve notepad.exe`/);
+});
+
+test('approval mode "all" approves every app but not blocked ones', async () => {
+  const config = { ...structuredClone(DEFAULT_CONFIG), approval: "all" as const };
+  const approvals = new Approvals(config, async () => {
+    throw new Error("should not ask");
+  });
+  await approvals.ensure(notepad);
+  await approvals.ensure(chrome);
+  assert.ok(blockReason(windowInfo({ processName: "1Password.exe" }), config));
+  assert.equal(parseApprovalMode("off"), "all");
+  assert.equal(parseApprovalMode("ALL"), "all");
+  assert.equal(parseApprovalMode("sometimes"), undefined);
+});
+
+test('choosing "every app" in the prompt switches the config to "all"', async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ocu-config-"));
+  const previous = process.env.OCU_CONFIG;
+  process.env.OCU_CONFIG = join(dir, "config.json");
+  try {
+    const config = structuredClone(DEFAULT_CONFIG);
+    let asked = 0;
+    const approvals = new Approvals(config, async () => {
+      asked++;
+      return "all";
+    });
+    await approvals.ensure(notepad);
+    await approvals.ensure(chrome);
+    assert.equal(asked, 1);
+    assert.equal(JSON.parse(readFileSync(process.env.OCU_CONFIG, "utf8")).approval, "all");
+    assert.equal(loadConfig().approval, "all");
+  } finally {
+    if (previous === undefined) delete process.env.OCU_CONFIG;
+    else process.env.OCU_CONFIG = previous;
+  }
 });

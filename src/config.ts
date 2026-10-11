@@ -2,7 +2,21 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-export type ApprovalMode = "prompt" | "allowlist" | "off";
+/**
+ * How apps get approved. Hard blocks (terminals, password managers, …) apply in every mode.
+ * - prompt: ask the user the first time an app is used (MCP elicitation); else the allowlist.
+ * - allowlist: only apps in approvedApps.
+ * - all: every app is approved.
+ */
+export type ApprovalMode = "prompt" | "allowlist" | "all";
+export const APPROVAL_MODES: readonly ApprovalMode[] = ["prompt", "allowlist", "all"];
+
+/** Accepts the older name "off" for "all". */
+export function parseApprovalMode(value: string | undefined): ApprovalMode | undefined {
+  const mode = value?.trim().toLowerCase();
+  if (mode === "off") return "all";
+  return APPROVAL_MODES.find((known) => known === mode);
+}
 export type ScreenshotMode = "auto" | "always" | "never";
 
 export type JevSettings = {
@@ -86,8 +100,9 @@ export function loadConfig(overrides: { jev?: boolean } = {}): Config {
     ...file,
     jev: { ...DEFAULT_CONFIG.jev, ...file.jev },
   };
-  const approval = process.env.OCU_APPROVAL as ApprovalMode | undefined;
-  if (approval && ["prompt", "allowlist", "off"].includes(approval)) config.approval = approval;
+  config.approval = parseApprovalMode(file.approval) ?? DEFAULT_CONFIG.approval;
+  const approval = parseApprovalMode(process.env.OCU_APPROVAL);
+  if (approval) config.approval = approval;
   const screenshots = process.env.OCU_SCREENSHOTS as ScreenshotMode | undefined;
   if (screenshots && ["auto", "always", "never"].includes(screenshots)) config.screenshots = screenshots;
   const jev = overrides.jev ?? envFlag("OCU_JEV");
@@ -96,12 +111,23 @@ export function loadConfig(overrides: { jev?: boolean } = {}): Config {
   return config;
 }
 
-/** Persist approved apps without disturbing other settings in the file. */
-export function updateApprovedApps(change: (apps: string[]) => string[]): string[] {
+/** Change some settings in the config file, leaving the others as they are. */
+function updateConfigFile(change: (file: Partial<Config>) => Partial<Config>): void {
   const path = configPath();
-  const file = readFileConfig(path);
-  const apps = change([...(file.approvedApps ?? [])]);
+  const file = change(readFileConfig(path));
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify({ ...file, approvedApps: apps }, null, 2)}\n`);
+  writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+}
+
+export function updateApprovedApps(change: (apps: string[]) => string[]): string[] {
+  let apps: string[] = [];
+  updateConfigFile((file) => {
+    apps = change([...(file.approvedApps ?? [])]);
+    return { ...file, approvedApps: apps };
+  });
   return apps;
+}
+
+export function setApprovalMode(mode: ApprovalMode): void {
+  updateConfigFile((file) => ({ ...file, approval: mode }));
 }
