@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 export type ApprovalMode = "prompt" | "allowlist" | "off";
@@ -55,6 +55,9 @@ export const DEFAULT_CONFIG: Config = {
     timeoutMs: 4000,
   },
 };
+
+/** Where the server records the last connected MCP client (name, version, capabilities; no content). */
+export const LAST_CLIENT_FILE = join(tmpdir(), "open-cu", "last-client.json");
 
 /** How to run this CLI from a shell: the script itself when known, else the installed command. */
 export function cliCommand(): string {

@@ -2,7 +2,8 @@
 // (cli.ts) are thin wrappers around this class.
 
 import { type Resolved, aliasExe, displayName, parseWindowId, resolveWindow } from "./apps.ts";
-import type { Config } from "./config.ts";
+import { readFileSync } from "node:fs";
+import { type Config, LAST_CLIENT_FILE } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
 import type { Platform } from "./platform.ts";
@@ -778,6 +779,15 @@ export class Computer {
     lines.push(`Jev: ${status ? (status.ready ? `ready (model ${status.model})` : status.reason) : "off"}`);
     const windows = await this.helper.call("listWindows", {});
     lines.push(`Visible app windows: ${windows.length}`);
+    try {
+      const last = JSON.parse(readFileSync(LAST_CLIENT_FILE, "utf8")) as { at: string; client?: { name: string; version: string }; elicitation: boolean };
+      lines.push(
+        `Last MCP client: ${last.client?.name ?? "unknown"} ${last.client?.version ?? ""} at ${last.at}; ` +
+          (last.elicitation ? "it can show approval prompts." : "it cannot show approval prompts, so approve apps with the approve command."),
+      );
+    } catch {
+      lines.push("Last MCP client: none recorded yet.");
+    }
     return { text: lines.join("\n") };
   }
 }

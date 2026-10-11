@@ -3,7 +3,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { Computer, type ToolOutput } from "./computer.ts";
-import type { Config } from "./config.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { type Config, LAST_CLIENT_FILE } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { Jev } from "./jev.ts";
 import { createPlatform } from "./platform.ts";
@@ -110,6 +112,25 @@ export function createServer(config: Config): { server: McpServer; computer: Com
   };
 
   const computer = new Computer({ config, platform: createPlatform(), jev, askUser });
+
+  // Record what the client supports, so `open-cu doctor` can tell whether approval
+  // prompts (elicitation) will appear in it.
+  server.server.oninitialized = () => {
+    try {
+      mkdirSync(dirname(LAST_CLIENT_FILE), { recursive: true });
+      writeFileSync(
+        LAST_CLIENT_FILE,
+        JSON.stringify({
+          at: new Date().toISOString(),
+          client: server.server.getClientVersion(),
+          elicitation: !!server.server.getClientCapabilities()?.elicitation,
+          capabilities: Object.keys(server.server.getClientCapabilities() ?? {}),
+        }),
+      );
+    } catch {
+      // Diagnostics only.
+    }
+  };
 
   const tool = <Shape extends z.ZodRawShape>(
     name: string,
