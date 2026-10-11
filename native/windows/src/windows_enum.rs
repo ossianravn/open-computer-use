@@ -10,7 +10,7 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_MENU,
+    INPUT, INPUT_0, INPUT_KEYBOARD, IsWindowEnabled, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_MENU,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumChildWindows, EnumWindows, GW_OWNER, GWL_EXSTYLE, GetClassNameW,
@@ -49,6 +49,12 @@ pub struct WindowInfo {
     pub minimized: bool,
     pub maximized: bool,
     pub foreground: bool,
+    /// False while a modal dialog blocks the window.
+    pub enabled: bool,
+    /// The window that owns this one (dialogs, popups), if any.
+    pub owner: Option<i64>,
+    /// A window a person would see in the taskbar or Alt+Tab.
+    pub app_window: bool,
     pub dpi: u32,
 }
 
@@ -186,6 +192,9 @@ pub fn describe_window(hwnd: HWND) -> WindowInfo {
             minimized: IsIconic(hwnd).as_bool(),
             maximized: IsZoomed(hwnd).as_bool(),
             foreground: GetForegroundWindow() == hwnd,
+            enabled: IsWindowEnabled(hwnd).as_bool(),
+            owner: GetWindow(hwnd, GW_OWNER).ok().filter(|owner| !owner.is_invalid()).map(hwnd_value),
+            app_window: is_app_window(hwnd),
             dpi: GetDpiForWindow(hwnd),
         }
     }

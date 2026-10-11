@@ -1,0 +1,45 @@
+{
+  "name": "@ossianravn/open-computer-use",
+  "version": "0.1.0",
+  "description": "Open, agent-agnostic computer use over MCP: drive desktop apps through the accessibility tree, with optional TypeSafe Jev targeting.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ossianravn/open-computer-use.git"
+  },
+  "keywords": ["mcp", "computer-use", "ui-automation", "accessibility", "agents", "codex", "claude", "jev", "typesafe"],
+  "bin": {
+    "open-computer-use": "dist/cli.mjs"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "files": [
+    "dist",
+    "native/windows/bin",
+    "skills",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "npm run build:native && npm run build:js",
+    "build:js": "node scripts/build.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --test \"tests/unit/*.test.ts\"",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.ts\"",
+    "dev": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@typesafe-ai/sdk": "0.6.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
