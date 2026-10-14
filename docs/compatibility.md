@@ -45,6 +45,11 @@ helper, adapter, manifests, skill, docs, license and readme.
 - **Approval dialog:** Claude Code 2.1.288 and OpenCode 2.0.18 advertise MCP
   elicitation to the server (recorded by `open-cu doctor`). The approval dialog itself
   was exercised only with an SDK test client.
+- **Approval prompts can be cancelled unseen.** Observed 14 October 2026: Claude Code
+  2.1.299 advertises MCP elicitation, yet in a Claude Desktop **Code** tab session it
+  cancelled open-cu's approval prompt without showing it. Version 0.2.0 reported that
+  cancellation as "the user declined" and blocked the agent. Since 0.2.1, approval
+  defaults to `all`, and a cancelled prompt is no longer treated as a refusal.
 - **Other platforms:** on macOS and Linux the server starts and every tool reports
   that only Windows is supported. No helper exists there yet.
 - **Code signing:** the prebuilt `ocu-win.exe` is unsigned. Security software that

@@ -9601,7 +9601,7 @@ ${result.text ?? ""}` };
     try {
       const last = JSON.parse(readFileSync3(LAST_CLIENT_FILE, "utf8"));
       lines.push(
-        `Last MCP client: ${last.client?.name ?? "unknown"} ${last.client?.version ?? ""} at ${last.at}; ` + (last.elicitation ? "it can show approval prompts." : "it cannot show approval prompts, so approve apps with the approve command.")
+        `Last MCP client: ${last.client?.name ?? "unknown"} ${last.client?.version ?? ""} at ${last.at}; ` + (last.elicitation ? "it says it can show approval prompts (only used in prompt mode)." : "it cannot show approval prompts (only used in prompt mode).")
       );
     } catch {
       lines.push("Last MCP client: none recorded yet.");
