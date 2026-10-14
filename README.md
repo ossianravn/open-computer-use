@@ -2,7 +2,7 @@
 
 ![open-cu: computer use for every agent. Claude Code, Codex, OpenCode and any MCP client.](docs/assets/header.jpg)
 
-[![Version 0.2.0](https://img.shields.io/badge/version-v0.2.0-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
+[![Version 0.2.1](https://img.shields.io/badge/version-v0.2.1-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
 
 **Let your coding agent use the apps on your computer.**
 
@@ -12,7 +12,7 @@ fill in forms and type, and it reports back only what changed. It speaks the sam
 language as OpenAI's Codex Computer Use, but it is open source and works with any agent.
 With the optional **TypeSafe Jev** model, your agent can simply *describe* what to click.
 
-**12 tools** · **Window reads in ~50 ms** · **Diffs, not dumps** · **Per-app approval** · **Optional Jev targeting**
+**12 tools** · **Window reads in ~50 ms** · **Diffs, not dumps** · **Works out of the box** · **Optional Jev targeting**
 
 **Contents** · [See it work](#see-it-work) · [Install](#install) · [First steps](#first-steps) · [Jev targeting](#faster-targeting-with-jev-optional) · [Tools](#what-your-agent-can-do) · [Safety](#safety-and-privacy) · [Troubleshooting](#troubleshooting)
 
@@ -253,16 +253,11 @@ Use open-cu to open Calculator and work out 7 × 6 by clicking its
 buttons. Tell me what the display shows.
 ```
 
-**2. Approve the app.** The first time the agent uses an app, your client asks:
-*"Allow open-cu to control CalculatorApp?"* Choose **Allow while this session runs**,
-**Always allow CalculatorApp**, **Always allow every app**, or **Deny**.
-
-Some clients can't show this prompt. In that case the agent tells you which app needs
-approval, and you approve it from a terminal:
-
-```sh
-npx --yes github:ossianravn/open-computer-use approve calculatorapp.exe
-```
+**2. There is nothing to approve.** By default the agent may use every app, so it is
+never stopped halfway by a permission prompt. Terminals, password managers, security
+tools and sign-in prompts stay blocked. Prefer to be asked the first time each app is
+used? Run `open-cu approval prompt`. If your client can't show that prompt, the agent
+tells you how to approve the app instead.
 
 **3. Watch it work.** While the agent works, a blue glow outlines your screen with a
 label at the top, so you always know when an agent is in control:
@@ -301,8 +296,10 @@ returns a choice with probabilities in about 250–400 ms.
 - **It only acts on a clear match.** Jev is asked twice with the options in opposite
   orders, plus whether the element exists at all. Anything uncertain returns a short
   list of candidates and changes nothing.
-- **It never guesses destructively.** A pick named *Delete*, *Send*, *Buy* and the like
-  is used only when the agent's own words say so.
+- **It checks destructive picks.** When a description lands on *Delete*, *Send*, *Buy*
+  and the like without naming it, Jev decides whether the description really means
+  that ("wipe all the data" → *Delete all data*: yes; "the button on the far right":
+  no). Without Jev, the agent has to name it.
 - **It checks outcomes.** Add `expect: "a Save As dialog opens"` and Jev reports whether
   the observed changes show it.
 - **It handles any language.** English descriptions match a Danish Calculator, as shown
@@ -367,8 +364,10 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
 
 ## Safety and privacy
 
-- **You approve each app** on first use, or approve every app with
-  `open-cu approval all`. Agents have no tool for approving apps.
+- **Every app is allowed by default**, so the agent is never blocked midway.
+  `open-cu approval prompt` asks you the first time each app is used, and
+  `open-cu approval allowlist` allows only apps you list with `open-cu approve`. Agents
+  have no tool for approving apps.
 - **Always blocked:**
   - terminals;
   - password managers;
@@ -415,10 +414,10 @@ element numbers, diffs and Jev.
 | Repository not found / permission denied | The repository is private: check that your Git credentials have access. |
 | `node` or `npm` not found | Install Node.js 22.18+ and reopen your client so it picks up the new PATH. |
 | Tools missing after installing | Start a new session. Claude Code: `/plugin` → **Installed**, then `/reload-plugins`. OpenCode: `opencode service restart`, then `opencode mcp list`. |
-| `app_not_approved` | Approve the app in the prompt, or run `open-cu approve <app>.exe` (or `open-cu approval all`). |
+| `app_not_approved` | Only in `prompt` or `allowlist` mode: run `open-cu approve <app>.exe`, or `open-cu approval all` to go back to the default. |
 | `app_blocked` | That app is on the safety block list; do that step yourself. |
 | `stopped_by_user` | Someone pressed Esc. Tell the agent when to continue. |
-| `user_active` | You were typing or clicking; the agent waits and retries. |
+| `user_active` | You kept typing or clicking for several seconds; open-cu waits for you first, then the agent retries. |
 | `target_ambiguous` | Several elements matched. The reply lists them; ask for one by number or describe it more precisely. |
 | `Jev targeting unavailable` | Run `open-cu jev status`; `open-cu jev setup` adds or replaces the key. |
 | `unsupported_platform` | open-cu runs on Windows only for now. |
@@ -442,7 +441,7 @@ folder to remove them too.
 
 ## Compatibility and status
 
-**v0.2.0 is an early release.** On 11 October 2026, these routes were installed from
+**v0.2.1 is an early release.** On 11 October 2026, these routes were installed from
 GitHub on Windows 11, each in an isolated profile. The installed server was then
 checked over MCP:
 

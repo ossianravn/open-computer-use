@@ -20,8 +20,8 @@ common ones for you:
 
 ```json
 {
-  "approval": "prompt",
-  "approvedApps": ["notepad.exe"],
+  "approval": "all",
+  "approvedApps": [],
   "blockedApps": [],
   "allowAgentApps": false,
   "screenshots": "auto",
@@ -44,8 +44,8 @@ common ones for you:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `approval` | `prompt` | `prompt`: ask the first time each app is used (or report how to approve it when the client cannot ask). `allowlist`: only `approvedApps`. `all`: every app. Hard blocks apply in every mode. |
-| `approvedApps` | `[]` | Executable names approved permanently. |
+| `approval` | `all` | `all`: every app, so the agent is never stopped by a prompt. `prompt`: ask the first time each app is used (or report how to approve it when the client cannot ask). `allowlist`: only `approvedApps`. Hard blocks apply in every mode. |
+| `approvedApps` | `[]` | Executable names approved permanently (used by `prompt` and `allowlist`). |
 | `blockedApps` | `[]` | Extra executables to refuse, on top of the built-in blocks. |
 | `allowAgentApps` | `false` | Allow driving AI agent apps (Claude, ChatGPT, Codex). |
 | `screenshots` | `auto` | When `get_app_state` attaches a screenshot: `auto` (only when the tree is sparse), `always` or `never`. |

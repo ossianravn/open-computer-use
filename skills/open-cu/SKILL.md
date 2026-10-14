@@ -59,9 +59,10 @@ see every action and can stop you with Esc.
 - **Never** type passwords, payment details or government ids, and never solve
   CAPTCHAs. Hand those steps to the user.
 - **`stopped_by_user`** means the user pressed Esc: stop and ask how to continue.
-  **`user_active`** means they are using the mouse or keyboard: wait, re-read the
-  state, then continue.
-- **`app_not_approved`**: tell the user how to approve the app (the message says how).
-  Do not edit the approval config yourself.
+- **`user_active`** means the user kept using the mouse or keyboard while open-cu waited
+  for them. Wait a few seconds, re-read the state, then continue; no need to ask.
+- **`app_not_approved`** only happens when the user switched approval to `prompt` or
+  `allowlist`. Tell them the command from the message. Do not edit the approval config
+  yourself, and do not switch to another tool to get around it.
 - When you finish, leave the apps as the user would expect: close dialogs you opened,
   and don't leave half-filled forms unless asked.

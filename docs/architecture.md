@@ -189,10 +189,19 @@ in time.
   managers, security and system administration tools, sign-in and UAC prompts, and AI
   agent apps unless `allowAgentApps` is set.
 - **Keys:** no Windows-key chords and no Ctrl+Alt+Delete.
-- **Approval:** `prompt` (MCP elicitation when the client supports it, else an
-  allowlist error that says how to approve), `allowlist`, or `all` (every app; `off` is an
-  accepted older name). "Always" answers are
-  written to the config file. There is no tool for approving apps.
+- **Approval:**
+  - `all` (the default): every app is allowed, so agents are never stopped midway.
+    `off` is an accepted older name.
+  - `prompt`: MCP elicitation where the client supports it. An explicit **Deny** is a
+    refusal; a prompt the client closes or cannot show is reported as such, not as a
+    refusal.
+  - `allowlist`: only listed apps.
+
+  "Always" answers are written to the config file. Approval settings are re-read from
+  disk when an app is not yet approved, so `open-cu approve` and `open-cu approval`
+  apply without a restart. There is no tool for approving apps.
 - **Input guard (helper):** physical Esc latches a stop (20 s by default). Physical key
-  or mouse-button activity within 700 ms makes input calls fail with `user_active`.
-  Synthetic input carries the injected flag and is ignored.
+  or mouse-button activity within 700 ms makes physical input fail with `user_active`.
+  The server waits and retries for about 5 s before passing that on, so a user typing
+  elsewhere only delays the agent. Synthetic input carries the injected flag and is
+  ignored.

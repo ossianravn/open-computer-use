@@ -56,10 +56,15 @@ matches.
 4. **Lexical fallback.** Used when Jev is off, unconfigured or unreachable. It scores name
    words, value, automation id, help text, context and role words. It accepts only a
    strong match (≥ 4) that leads the runner-up by 1.6×.
-5. **Destructive guard.** A pick whose name contains a destructive verb (delete, remove,
-   send, submit, pay, buy, order, confirm, reset, sign out, …) is downgraded to ambiguous
-   unless the target itself uses that verb. Element text is untrusted, and a judgment
-   alone never authorizes an irreversible action.
+5. **Destructive check.** A pick whose name contains a destructive verb (delete,
+   remove, send, submit, pay, buy, order, confirm, reset, sign out, …) needs more than a
+   match when the target does not use that verb. Jev answers one Noul: does the target
+   clearly mean this element, including its effect? It needs p ≥ 0.8 to proceed:
+   - "wipe all the data" → *Delete all data*: p = 0.92, clicked;
+   - "the button on the far right": p = 0.63, refused with candidates.
+
+   Without Jev, or if the check fails, the pick is downgraded to ambiguous. Element
+   text is untrusted, so a pick alone never authorizes an irreversible action.
 
 When nothing qualifies, the tool fails with `target_ambiguous` or `target_not_found`,
 lists the best candidates with their indices (and probabilities), and does nothing.
@@ -81,7 +86,8 @@ agent only needs a yes or no.
 | English targets on a Danish Calculator: "the 7 key", "multiply", "the 6 key", "equals" | 4/4 correct, confidence 1.00, 250–320 ms each; `expect: "the display shows 42"` → p=0.96 |
 | Wikipedia, about 150 candidates: "link to the article about personal computers" | `Personal computer`, p=0.94 (runner-up: the second link to the same article), 390 ms |
 | "the colour of a clear sky" (Blue vs. its list) | orders disagreed, so nothing was done |
-| "the button on the far right" (Delete all data) | refused by the destructive guard |
+| "the button on the far right" (Delete all data) | refused: Jev p=0.63 that it means delete |
+| "wipe all the data" (Delete all data) | allowed: Jev p=0.92, clicked |
 
 These are spot checks, not a benchmark. The thresholds are starting points and should be
 tuned on labelled traces from real use.

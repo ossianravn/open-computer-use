@@ -4,9 +4,9 @@ import { dirname, join } from "node:path";
 
 /**
  * How apps get approved. Hard blocks (terminals, password managers, …) apply in every mode.
+ * - all (default): every app is approved, so the agent is never stopped by a prompt.
  * - prompt: ask the user the first time an app is used (MCP elicitation); else the allowlist.
  * - allowlist: only apps in approvedApps.
- * - all: every app is approved.
  */
 export type ApprovalMode = "prompt" | "allowlist" | "all";
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["prompt", "allowlist", "all"];
@@ -57,7 +57,7 @@ export type Config = {
 };
 
 export const DEFAULT_CONFIG: Config = {
-  approval: "prompt",
+  approval: "all",
   approvedApps: [],
   blockedApps: [],
   allowAgentApps: false,

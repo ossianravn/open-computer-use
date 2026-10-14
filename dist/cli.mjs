@@ -7331,7 +7331,7 @@ function parseApprovalMode(value) {
   return APPROVAL_MODES.find((known) => known === mode);
 }
 var DEFAULT_CONFIG = {
-  approval: "prompt",
+  approval: "all",
   approvedApps: [],
   blockedApps: [],
   allowAgentApps: false,
@@ -8596,16 +8596,45 @@ async function resolveTarget(state, view, target2, purpose, jev) {
   if (resolution.decision === "pick" && resolution.candidate) {
     const verb = destructiveMismatch(target2, resolution.candidate.node);
     if (verb) {
-      const { candidate: _, ...rest } = resolution;
-      resolution = {
-        ...rest,
-        decision: "ambiguous",
-        reason: `The best match would "${verb}", which the target did not ask for. Name it explicitly or pass its element_index.`
-      };
+      let intended;
+      if (client && jev) {
+        try {
+          intended = await confirmDestructive(client, jev.settings, target2, resolution.candidate, verb);
+        } catch {
+        }
+      }
+      if (intended !== void 0 && intended >= DESTRUCTIVE_CONFIRMATION) {
+        resolution.reason = [resolution.reason, `Jev confirmed the target means "${verb}" (p=${intended.toFixed(2)}).`].filter(Boolean).join(" ");
+      } else {
+        const { candidate: _, ...rest } = resolution;
+        resolution = {
+          ...rest,
+          decision: "ambiguous",
+          reason: `The best match would "${verb}", which the target did not clearly ask for${intended !== void 0 ? ` (Jev p=${intended.toFixed(2)})` : ""}. Name it explicitly or pass its element_index.`
+        };
+      }
     }
   }
   if (fallbackReason) resolution.reason = [fallbackReason, resolution.reason].filter(Boolean).join(" ");
   return { ...resolution, ms: elapsed() };
+}
+var DESTRUCTIVE_CONFIRMATION = 0.8;
+async function confirmDestructive(client, settings, target2, candidate, verb) {
+  const response = await client.systemOne({
+    state: { target: target2, element: candidate.description, context: candidate.context, effect: verb },
+    questions: {
+      intended: {
+        type: "noul",
+        instructions: "An agent asked to act on `target`, and the matching UI element is `element`, whose effect is `effect`. Does `target` clearly mean this element, including its `effect`?",
+        criteria: {
+          true: "`target` clearly refers to this element and asks for its effect.",
+          false: "`target` is vague, points at something else, or does not ask for this effect."
+        }
+      }
+    },
+    ...settings.model ? { model: settings.model } : {}
+  });
+  return response.answers.intended.noul;
 }
 async function verifyOutcome(jev, state, action, expected, diff, focused, windows) {
   const client = jev.get();
@@ -8766,15 +8795,25 @@ var Approvals = class {
   session = /* @__PURE__ */ new Set();
   config;
   askUser;
-  constructor(config2, askUser) {
+  reload;
+  constructor(config2, askUser, reload) {
     this.config = config2;
     this.askUser = askUser;
+    this.reload = reload;
   }
   isApproved(app2) {
     return this.config.approval === "all" || this.session.has(app2.exe) || this.config.approvedApps.some((name) => name.toLowerCase() === app2.exe);
   }
   async ensure(window) {
     const app2 = appIdentity(window);
+    if (this.reload && !this.isApproved(app2)) {
+      try {
+        const fresh = this.reload();
+        this.config.approval = fresh.approval;
+        this.config.approvedApps = fresh.approvedApps;
+      } catch {
+      }
+    }
     if (this.isApproved(app2)) return;
     if (this.config.approval === "prompt" && this.askUser) {
       const decision = await this.askUser(app2, window);
@@ -8792,6 +8831,12 @@ var Approvals = class {
       }
       if (decision === "deny") {
         throw new ToolError("app_not_approved", `The user declined access to ${app2.label}. Do not retry; ask the user how to proceed.`);
+      }
+      if (decision === "dismissed") {
+        throw new ToolError(
+          "app_not_approved",
+          `The approval prompt for ${app2.label} was closed or could not be shown, so it was not approved. Tell the user they can approve it with \`open-cu approve ${app2.exe}\`, or approve every app with \`open-cu approval all\` (the default); then retry.`
+        );
       }
     }
     throw new ToolError(
@@ -8908,7 +8953,7 @@ var Computer = class {
     this.config = options.config;
     this.platform = options.platform;
     this.jev = options.jev;
-    this.approvals = new Approvals(options.config, options.askUser);
+    this.approvals = new Approvals(options.config, options.askUser, () => loadConfig());
     this.identities = options.identities ?? /* @__PURE__ */ new Map();
   }
   get helper() {
@@ -8964,6 +9009,20 @@ var Computer = class {
   }
   view(state) {
     return this.views.get(state.hwnd) ?? buildView(state);
+  }
+  /**
+   * Physical input. The helper refuses it while the user is typing or clicking (so the
+   * agent never fights them for the pointer); wait for them a few times before giving up.
+   */
+  async input(method, params) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.helper.call(method, params);
+      } catch (error62) {
+        if (!(error62 instanceof ToolError) || error62.code !== "user_active" || attempt >= 6) throw error62;
+        await sleep2(700);
+      }
+    }
   }
   // ---------------------------------------------------------------- elements
   node(state, index) {
@@ -9274,7 +9333,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
     }
     if (method === "accessibility") throw new ToolError("unsupported", "Accessibility clicks are left single clicks without modifiers.");
     const point = await this.centerOf(state, node2);
-    await this.helper.call("click", { ...point, hwnd: state.hwnd, button, count, modifiers: args.modifiers ?? [] });
+    await this.input("click", { ...point, hwnd: state.hwnd, button, count, modifiers: args.modifiers ?? [] });
     return { how: `with a physical ${button} ${count > 1 ? `${count}\xD7 ` : ""}click at its center`, pending: false };
   }
   async click(args) {
@@ -9283,7 +9342,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
     let pending = false;
     if (args.x !== void 0 && args.y !== void 0) {
       const point = await this.toScreen(state, args.x, args.y);
-      await this.helper.call("click", {
+      await this.input("click", {
         ...point,
         hwnd: state.hwnd,
         button: args.mouse_button ?? "left",
@@ -9315,8 +9374,8 @@ Nothing was done. Retry with element_index, or a more specific target.`
       summary.push(await this.chooseOption(state, node2, args.value));
     } else if (node2.focusable) {
       await this.elementCall(state, node2, "focus");
-      await this.helper.call("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
-      await this.helper.call("typeText", { text: args.value, hwnd: state.hwnd });
+      await this.input("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
+      await this.input("typeText", { text: args.value, hwnd: state.hwnd });
       summary.push(`Element ${node2.index} has no settable value; focused it, selected all and typed the value instead.`);
     } else {
       throw new ToolError("not_settable", `Element ${node2.index} (${node2.role}) cannot hold a value. Use click or type_text.`);
@@ -9358,7 +9417,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
       await this.elementCall(state, node2, "focus");
       summary.push(`Focused ${node2.index} ${clean(node2.name) || node2.role}.`);
     }
-    const typed = await this.helper.call("typeText", { text: args.text, hwnd: state.hwnd });
+    const typed = await this.input("typeText", { text: args.text, hwnd: state.hwnd });
     summary.push(`Typed ${typed.characters} characters.`);
     if (typed.unconfirmed > 0) {
       summary.push(`Warning: the app did not confirm ${typed.unconfirmed} of them in time; check the text below.`);
@@ -9368,7 +9427,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
   async pressKey(args) {
     assertKeyAllowed(args.key);
     const { state, before, beforeWindows, note } = await this.begin(args);
-    await this.helper.call("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
+    await this.input("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
     const summary = [...note ? [note] : [], `Pressed ${args.key}${(args.repeat ?? 1) > 1 ? ` \xD7${args.repeat}` : ""}.`];
     return this.outcome(state, before, beforeWindows, summary, args);
   }
@@ -9384,7 +9443,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
     const wheel = (point) => {
       const vertical = args.direction === "up" || args.direction === "down";
       const sign = args.direction === "down" || args.direction === "right" ? 1 : -1;
-      return this.helper.call("scroll", { ...point, hwnd: state.hwnd, dx: vertical ? 0 : sign * notches, dy: vertical ? sign * notches : 0 });
+      return this.input("scroll", { ...point, hwnd: state.hwnd, dx: vertical ? 0 : sign * notches, dy: vertical ? sign * notches : 0 });
     };
     if (args.x !== void 0 && args.y !== void 0) {
       await wheel(await this.toScreen(state, args.x, args.y));
@@ -9412,7 +9471,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
     const { state, before, beforeWindows, note } = await this.begin(args);
     const from = await this.toScreen(state, args.from_x, args.from_y);
     const to = await this.toScreen(state, args.to_x, args.to_y);
-    await this.helper.call("drag", { from, to, hwnd: state.hwnd });
+    await this.input("drag", { from, to, hwnd: state.hwnd });
     const summary = [...note ? [note] : [], `Dragged from (${args.from_x}, ${args.from_y}) to (${args.to_x}, ${args.to_y}).`];
     return this.outcome(state, before, beforeWindows, summary, args);
   }
@@ -9433,7 +9492,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
         await this.elementCall(state, node2, "showContextMenu");
         summary.push(`Opened the context menu of ${label}.`);
       } catch {
-        await this.helper.call("click", { ...await this.centerOf(state, node2), hwnd: state.hwnd, button: "right" });
+        await this.input("click", { ...await this.centerOf(state, node2), hwnd: state.hwnd, button: "right" });
         summary.push(`Right-clicked ${label}.`);
       }
     } else if (name === "read text") {
@@ -39066,7 +39125,7 @@ var StdioServerTransport = class {
 // src/server.ts
 import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname as dirname3 } from "node:path";
-var VERSION2 = "0.2.0";
+var VERSION2 = "0.2.1";
 function instructions(jevOn) {
   return [
     "open-cu operates desktop apps on the user's computer through their accessibility tree, the way Codex Computer Use does.",
@@ -39079,7 +39138,8 @@ function instructions(jevOn) {
     "Ask the user before sending messages, buying, deleting data, changing account, security or privacy settings, or accepting agreements.",
     "Never type passwords, payment details or government ids, and never solve CAPTCHAs: hand those steps to the user.",
     "Terminals, password managers, security tools and sign-in prompts are blocked. Use your own shell tool for commands.",
-    "If a call fails with stopped_by_user or user_active, stop and check with the user before continuing."
+    "If a call fails with stopped_by_user, the user pressed Esc: stop and check with the user before continuing.",
+    "user_active means the user was typing or clicking; open-cu already waited for them. Retry after a few seconds."
   ].join("\n");
 }
 function toResult(output2) {
@@ -39135,7 +39195,8 @@ function createServer(config2) {
       },
       { timeout: 10 * 6e4 }
     );
-    if (result.action !== "accept") return "deny";
+    if (result.action === "decline") return "deny";
+    if (result.action !== "accept") return "dismissed";
     const access = result.content?.access;
     return access === "session" || access === "always" || access === "all" ? access : "deny";
   };

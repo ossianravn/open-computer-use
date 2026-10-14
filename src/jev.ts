@@ -269,16 +269,64 @@ export async function resolveTarget(
   if (resolution.decision === "pick" && resolution.candidate) {
     const verb = destructiveMismatch(target, resolution.candidate.node);
     if (verb) {
-      const { candidate: _, ...rest } = resolution;
-      resolution = {
-        ...rest,
-        decision: "ambiguous",
-        reason: `The best match would "${verb}", which the target did not ask for. Name it explicitly or pass its element_index.`,
-      };
+      // The pick would do something irreversible the target's words don't name
+      // ("wipe everything" → "Delete all data"). Jev decides whether the description
+      // really means it; without Jev, the agent has to name it.
+      let intended: number | undefined;
+      if (client && jev) {
+        try {
+          intended = await confirmDestructive(client, jev.settings, target, resolution.candidate, verb);
+        } catch {
+          // Fall through to the strict rule.
+        }
+      }
+      if (intended !== undefined && intended >= DESTRUCTIVE_CONFIRMATION) {
+        resolution.reason = [resolution.reason, `Jev confirmed the target means "${verb}" (p=${intended.toFixed(2)}).`]
+          .filter(Boolean)
+          .join(" ");
+      } else {
+        const { candidate: _, ...rest } = resolution;
+        resolution = {
+          ...rest,
+          decision: "ambiguous",
+          reason:
+            `The best match would "${verb}", which the target did not clearly ask for` +
+            `${intended !== undefined ? ` (Jev p=${intended.toFixed(2)})` : ""}. Name it explicitly or pass its element_index.`,
+        };
+      }
     }
   }
   if (fallbackReason) resolution.reason = [fallbackReason, resolution.reason].filter(Boolean).join(" ");
   return { ...resolution, ms: elapsed() };
+}
+
+/** How sure Jev must be that a vague target means an irreversible action. */
+const DESTRUCTIVE_CONFIRMATION = 0.8;
+
+async function confirmDestructive(
+  client: TypeSafeClient,
+  settings: JevSettings,
+  target: string,
+  candidate: Candidate,
+  verb: string,
+): Promise<number> {
+  const response = await client.systemOne({
+    state: { target, element: candidate.description, context: candidate.context, effect: verb },
+    questions: {
+      intended: {
+        type: "noul",
+        instructions:
+          "An agent asked to act on `target`, and the matching UI element is `element`, whose effect is `effect`. " +
+          "Does `target` clearly mean this element, including its `effect`?",
+        criteria: {
+          true: "`target` clearly refers to this element and asks for its effect.",
+          false: "`target` is vague, points at something else, or does not ask for this effect.",
+        },
+      },
+    },
+    ...(settings.model ? { model: settings.model } : {}),
+  });
+  return response.answers.intended.noul;
 }
 
 export type Verification = { probability: number; ms: number };

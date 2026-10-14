@@ -58,10 +58,20 @@ test("Windows-key chords are refused", () => {
   assert.doesNotThrow(() => assertKeyAllowed("ctrl+s"));
 });
 
-test("approval asks the user once per session and honours a denial", async () => {
-  const config = structuredClone(DEFAULT_CONFIG);
+const prompting = () => ({ ...structuredClone(DEFAULT_CONFIG), approval: "prompt" as const });
+
+test("by default every app is approved without asking", async () => {
+  assert.equal(DEFAULT_CONFIG.approval, "all");
+  const approvals = new Approvals(structuredClone(DEFAULT_CONFIG), async () => {
+    throw new Error("should not ask");
+  });
+  await approvals.ensure(notepad);
+  await approvals.ensure(chrome);
+});
+
+test("prompt mode asks once per session and honours an explicit denial", async () => {
   let asked = 0;
-  const approvals = new Approvals(config, async () => {
+  const approvals = new Approvals(prompting(), async () => {
     asked++;
     return "session";
   });
@@ -69,11 +79,31 @@ test("approval asks the user once per session and honours a denial", async () =>
   await approvals.ensure(notepad);
   assert.equal(asked, 1);
 
-  const denying = new Approvals(structuredClone(DEFAULT_CONFIG), async () => "deny");
+  const denying = new Approvals(prompting(), async () => "deny");
   await assert.rejects(denying.ensure(notepad), /declined/);
 
-  const silent = new Approvals(structuredClone(DEFAULT_CONFIG), async () => undefined);
+  const silent = new Approvals(prompting(), async () => undefined);
   await assert.rejects(silent.ensure(notepad), /`open-cu approve notepad.exe`/);
+});
+
+test("a dismissed prompt is not reported as the user declining", async () => {
+  const dismissed = new Approvals(prompting(), async () => "dismissed");
+  const error = await dismissed.ensure(notepad).then(
+    () => undefined,
+    (reason: Error) => reason,
+  );
+  assert.ok(error);
+  assert.doesNotMatch(error.message, /declined|Do not retry/);
+  assert.match(error.message, /closed or could not be shown/);
+  assert.match(error.message, /open-cu approval all/);
+});
+
+test("approval changes on disk apply without a restart", async () => {
+  let onDisk: { approval: "prompt" | "all"; approvedApps: string[] } = { approval: "prompt", approvedApps: [] };
+  const approvals = new Approvals(prompting(), async () => undefined, () => onDisk);
+  await assert.rejects(approvals.ensure(notepad), /approve/);
+  onDisk = { approval: "all", approvedApps: [] };
+  await approvals.ensure(notepad);
 });
 
 test('approval mode "all" approves every app but not blocked ones', async () => {
@@ -94,9 +124,8 @@ test('choosing "every app" in the prompt switches the config to "all"', async ()
   const previous = process.env.OCU_CONFIG;
   process.env.OCU_CONFIG = join(dir, "config.json");
   try {
-    const config = structuredClone(DEFAULT_CONFIG);
     let asked = 0;
-    const approvals = new Approvals(config, async () => {
+    const approvals = new Approvals(prompting(), async () => {
       asked++;
       return "all";
     });

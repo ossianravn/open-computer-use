@@ -1,6 +1,6 @@
 {
   "name": "open-cu",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": { "name": "ossianravn", "url": "https://github.com/ossianravn" },
   "description": "Operate Windows desktop apps from your coding agent through their accessibility tree, with optional TypeSafe Jev targeting.",
   "repository": "https://github.com/ossianravn/open-computer-use",

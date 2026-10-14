@@ -3,7 +3,7 @@
 
 import { type Resolved, aliasExe, displayName, parseWindowId, resolveWindow } from "./apps.ts";
 import { readFileSync, statSync } from "node:fs";
-import { type Config, LAST_CLIENT_FILE } from "./config.ts";
+import { type Config, LAST_CLIENT_FILE, loadConfig } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
 import type { Platform } from "./platform.ts";
@@ -100,7 +100,7 @@ export class Computer {
     this.config = options.config;
     this.platform = options.platform;
     this.jev = options.jev;
-    this.approvals = new Approvals(options.config, options.askUser);
+    this.approvals = new Approvals(options.config, options.askUser, () => loadConfig());
     this.identities = options.identities ?? new Map();
   }
 
@@ -169,6 +169,24 @@ export class Computer {
 
   private view(state: WindowState): View {
     return this.views.get(state.hwnd) ?? buildView(state);
+  }
+
+  /**
+   * Physical input. The helper refuses it while the user is typing or clicking (so the
+   * agent never fights them for the pointer); wait for them a few times before giving up.
+   */
+  private async input<M extends "click" | "typeText" | "pressKey" | "scroll" | "drag">(
+    method: M,
+    params: HelperMethods[M]["params"],
+  ): Promise<HelperMethods[M]["result"]> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.helper.call(method, params);
+      } catch (error) {
+        if (!(error instanceof ToolError) || error.code !== "user_active" || attempt >= 6) throw error;
+        await sleep(700);
+      }
+    }
   }
 
   // ---------------------------------------------------------------- elements
@@ -521,7 +539,7 @@ export class Computer {
     }
     if (method === "accessibility") throw new ToolError("unsupported", "Accessibility clicks are left single clicks without modifiers.");
     const point = await this.centerOf(state, node);
-    await this.helper.call("click", { ...point, hwnd: state.hwnd, button, count, modifiers: args.modifiers ?? [] });
+    await this.input("click", { ...point, hwnd: state.hwnd, button, count, modifiers: args.modifiers ?? [] });
     return { how: `with a physical ${button} ${count > 1 ? `${count}× ` : ""}click at its center`, pending: false };
   }
 
@@ -531,7 +549,7 @@ export class Computer {
     let pending = false;
     if (args.x !== undefined && args.y !== undefined) {
       const point = await this.toScreen(state, args.x, args.y);
-      await this.helper.call("click", {
+      await this.input("click", {
         ...point,
         hwnd: state.hwnd,
         button: args.mouse_button ?? "left",
@@ -564,8 +582,8 @@ export class Computer {
       summary.push(await this.chooseOption(state, node, args.value));
     } else if (node.focusable) {
       await this.elementCall(state, node, "focus");
-      await this.helper.call("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
-      await this.helper.call("typeText", { text: args.value, hwnd: state.hwnd });
+      await this.input("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
+      await this.input("typeText", { text: args.value, hwnd: state.hwnd });
       summary.push(`Element ${node.index} has no settable value; focused it, selected all and typed the value instead.`);
     } else {
       throw new ToolError("not_settable", `Element ${node.index} (${node.role}) cannot hold a value. Use click or type_text.`);
@@ -611,7 +629,7 @@ export class Computer {
       await this.elementCall(state, node, "focus");
       summary.push(`Focused ${node.index} ${clean(node.name) || node.role}.`);
     }
-    const typed = await this.helper.call("typeText", { text: args.text, hwnd: state.hwnd });
+    const typed = await this.input("typeText", { text: args.text, hwnd: state.hwnd });
     summary.push(`Typed ${typed.characters} characters.`);
     if (typed.unconfirmed > 0) {
       summary.push(`Warning: the app did not confirm ${typed.unconfirmed} of them in time; check the text below.`);
@@ -622,7 +640,7 @@ export class Computer {
   async pressKey(args: PressKeyArgs): Promise<ToolOutput> {
     assertKeyAllowed(args.key);
     const { state, before, beforeWindows, note } = await this.begin(args);
-    await this.helper.call("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
+    await this.input("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
     const summary = [...(note ? [note] : []), `Pressed ${args.key}${(args.repeat ?? 1) > 1 ? ` ×${args.repeat}` : ""}.`];
     return this.outcome(state, before, beforeWindows, summary, args);
   }
@@ -640,7 +658,7 @@ export class Computer {
     const wheel = (point: { x: number; y: number }) => {
       const vertical = args.direction === "up" || args.direction === "down";
       const sign = args.direction === "down" || args.direction === "right" ? 1 : -1;
-      return this.helper.call("scroll", { ...point, hwnd: state.hwnd, dx: vertical ? 0 : sign * notches, dy: vertical ? sign * notches : 0 });
+      return this.input("scroll", { ...point, hwnd: state.hwnd, dx: vertical ? 0 : sign * notches, dy: vertical ? sign * notches : 0 });
     };
     if (args.x !== undefined && args.y !== undefined) {
       await wheel(await this.toScreen(state, args.x, args.y));
@@ -669,7 +687,7 @@ export class Computer {
     const { state, before, beforeWindows, note } = await this.begin(args);
     const from = await this.toScreen(state, args.from_x, args.from_y);
     const to = await this.toScreen(state, args.to_x, args.to_y);
-    await this.helper.call("drag", { from, to, hwnd: state.hwnd });
+    await this.input("drag", { from, to, hwnd: state.hwnd });
     const summary = [...(note ? [note] : []), `Dragged from (${args.from_x}, ${args.from_y}) to (${args.to_x}, ${args.to_y}).`];
     return this.outcome(state, before, beforeWindows, summary, args);
   }
@@ -691,7 +709,7 @@ export class Computer {
         await this.elementCall(state, node, "showContextMenu");
         summary.push(`Opened the context menu of ${label}.`);
       } catch {
-        await this.helper.call("click", { ...(await this.centerOf(state, node)), hwnd: state.hwnd, button: "right" });
+        await this.input("click", { ...(await this.centerOf(state, node)), hwnd: state.hwnd, button: "right" });
         summary.push(`Right-clicked ${label}.`);
       }
     } else if (name === "read text") {

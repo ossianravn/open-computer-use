@@ -11,7 +11,7 @@ import { Jev } from "./jev.ts";
 import { createPlatform } from "./platform.ts";
 import type { ApprovalDecision, AskUser } from "./policy.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 
 function instructions(jevOn: boolean): string {
   return [
@@ -27,7 +27,8 @@ function instructions(jevOn: boolean): string {
     "Ask the user before sending messages, buying, deleting data, changing account, security or privacy settings, or accepting agreements.",
     "Never type passwords, payment details or government ids, and never solve CAPTCHAs: hand those steps to the user.",
     "Terminals, password managers, security tools and sign-in prompts are blocked. Use your own shell tool for commands.",
-    "If a call fails with stopped_by_user or user_active, stop and check with the user before continuing.",
+    "If a call fails with stopped_by_user, the user pressed Esc: stop and check with the user before continuing.",
+    "user_active means the user was typing or clicking; open-cu already waited for them. Retry after a few seconds.",
   ].join("\n");
 }
 
@@ -111,7 +112,10 @@ export function createServer(config: Config): { server: McpServer; computer: Com
       },
       { timeout: 10 * 60_000 },
     );
-    if (result.action !== "accept") return "deny";
+    // Only an explicit "Decline" is a refusal. Clients that cannot show the prompt
+    // cancel it; that must not read as the user saying no.
+    if (result.action === "decline") return "deny";
+    if (result.action !== "accept") return "dismissed";
     const access = result.content?.access;
     return access === "session" || access === "always" || access === "all" ? (access as ApprovalDecision) : "deny";
   };

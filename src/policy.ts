@@ -83,25 +83,35 @@ export function assertKeyAllowed(key: string): void {
   }
 }
 
-/** "all" approves every app from now on (the user chose it in the prompt). */
-export type ApprovalDecision = "session" | "always" | "all" | "deny";
+/**
+ * The user's answer to an approval prompt. "all" approves every app from now on;
+ * "dismissed" means the prompt was closed or never shown (some clients cancel prompts
+ * they cannot display), which is not a refusal.
+ */
+export type ApprovalDecision = "session" | "always" | "all" | "deny" | "dismissed";
 
 /** Ask the user (via MCP elicitation) whether to allow an app. Undefined when the client cannot ask. */
 export type AskUser = (app: AppIdentity, window: WindowInfo) => Promise<ApprovalDecision | undefined>;
 
+/** Current approval settings from disk, so CLI changes apply without a restart. */
+export type ReloadApprovals = () => Pick<Config, "approval" | "approvedApps">;
+
 /**
- * Per-app approval. Approvals live in the user's config (always) or this session
- * (session). Agents cannot approve apps: only the user, through the client's prompt,
- * the CLI or the config file.
+ * Per-app approval. The default mode, "all", approves every app (hard blocks still
+ * apply). In "prompt" and "allowlist" modes, approvals live in the user's config
+ * (always) or this session (session). Agents cannot approve apps: only the user,
+ * through the client's prompt, the CLI or the config file.
  */
 export class Approvals {
   private readonly session = new Set<string>();
   private readonly config: Config;
   private readonly askUser: AskUser | undefined;
+  private readonly reload: ReloadApprovals | undefined;
 
-  constructor(config: Config, askUser?: AskUser) {
+  constructor(config: Config, askUser?: AskUser, reload?: ReloadApprovals) {
     this.config = config;
     this.askUser = askUser;
+    this.reload = reload;
   }
 
   isApproved(app: AppIdentity): boolean {
@@ -114,6 +124,15 @@ export class Approvals {
 
   async ensure(window: WindowInfo): Promise<void> {
     const app = appIdentity(window);
+    if (this.reload && !this.isApproved(app)) {
+      try {
+        const fresh = this.reload();
+        this.config.approval = fresh.approval;
+        this.config.approvedApps = fresh.approvedApps;
+      } catch {
+        // Keep the settings the server started with.
+      }
+    }
     if (this.isApproved(app)) return;
     if (this.config.approval === "prompt" && this.askUser) {
       const decision = await this.askUser(app, window);
@@ -131,6 +150,14 @@ export class Approvals {
       }
       if (decision === "deny") {
         throw new ToolError("app_not_approved", `The user declined access to ${app.label}. Do not retry; ask the user how to proceed.`);
+      }
+      if (decision === "dismissed") {
+        throw new ToolError(
+          "app_not_approved",
+          `The approval prompt for ${app.label} was closed or could not be shown, so it was not approved. ` +
+            `Tell the user they can approve it with \`open-cu approve ${app.exe}\`, or approve every app with ` +
+            `\`open-cu approval all\` (the default); then retry.`,
+        );
       }
     }
     throw new ToolError(
