@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, loadConfig, parseApprovalMode } from "../../src/config.ts";
 import { ToolError } from "../../src/errors.ts";
-import { Approvals, assertKeyAllowed, blockReason } from "../../src/policy.ts";
+import { Approvals, assertKeyAllowed, blockReason, isLaunchDenied } from "../../src/policy.ts";
+import { Computer } from "../../src/computer.ts";
 import { windowInfo } from "./helpers.ts";
 
 const notepad = windowInfo({ hwnd: 1, pid: 10, processName: "Notepad.exe", title: "notes.txt - Notepad" });
@@ -56,6 +57,43 @@ test("Windows-key chords are refused", () => {
   assert.throws(() => assertKeyAllowed("super+r"), /Windows-key/);
   assert.throws(() => assertKeyAllowed("ctrl+alt+delete"));
   assert.doesNotThrow(() => assertKeyAllowed("ctrl+s"));
+});
+
+test("macOS aliases and bundle identities resolve without Windows executable names", () => {
+  assert.equal(matchScore(windowInfo({ processName: "Google Chrome" }), "chrome"), 100);
+  assert.equal(matchScore(windowInfo({ processName: "Code" }), "vscode"), 100);
+  assert.equal(matchScore(windowInfo({ processName: "TextEdit", bundleId: "com.apple.TextEdit" }), "com.apple.TextEdit"), 100);
+  assert.equal(matchScore(windowInfo({ processName: "Microsoft Word" }), "word"), 100);
+});
+
+test("macOS protected apps stay blocked by executable and bundle identity", () => {
+  for (const processName of ["Terminal", "iTerm2", "Warp", "Ghostty", "Passwords", "Keychain Access", "1Password", "System Settings", "SecurityAgent", "loginwindow", "Codex", "Claude", "ChatGPT"]) {
+    assert.ok(blockReason(windowInfo({ processName }), structuredClone(DEFAULT_CONFIG)), processName);
+  }
+  for (const bundleId of ["com.apple.Terminal", "com.googlecode.iterm2", "com.apple.systempreferences", "com.apple.Passwords", "com.openai.codex"]) {
+    assert.ok(blockReason(windowInfo({ processName: "Renamed app", bundleId }), structuredClone(DEFAULT_CONFIG)), bundleId);
+  }
+  assert.equal(blockReason(windowInfo({ processName: "TextEdit", bundleId: "com.apple.TextEdit" }), DEFAULT_CONFIG), undefined);
+  assert.equal(blockReason(windowInfo({ processName: "Codex", bundleId: "com.openai.codex" }), { ...DEFAULT_CONFIG, allowAgentApps: true }), undefined);
+});
+
+test("macOS permits app Command shortcuts and blocks OS escape shortcuts", () => {
+  for (const key of ["cmd+s", "command+a", "meta+c", "cmd+shift+z", "ctrl+a", "Return"]) assert.doesNotThrow(() => assertKeyAllowed(key, "macos"), key);
+  for (const key of ["cmd+space", "command+Tab", "meta+grave", "cmd+option+Escape", "control+command+q", "ctrl+up", "control_l+F2"]) assert.throws(() => assertKeyAllowed(key, "macos"), /macOS shell/, key);
+  assert.throws(() => assertKeyAllowed("meta+s", "windows"), /Windows-key/);
+});
+
+test("macOS launch checks the resolved app identity before starting it", async () => {
+  const computer = new Computer({ config: structuredClone(DEFAULT_CONFIG), platform: {
+    name: "macos", helperPath: "", close() {},
+    helper: { close() {}, call: async () => { throw new Error("must not call helper"); } },
+    installedApps: async () => [{ name: "My command console", id: "/Applications/Console.app", processName: "Renamed", bundleId: "com.apple.Terminal" }],
+    launch: async () => { throw new Error("must not launch"); },
+  } });
+  await assert.rejects(computer.launchApp({ app: "My command" }), /off limits/);
+  for (const name of ["zsh", "osascript", "Script Editor", "Automator", "Shortcuts"]) assert.equal(isLaunchDenied(name), true, name);
+  assert.equal(isLaunchDenied("Renamed", "com.apple.ScriptEditor2"), true);
+  assert.equal(isLaunchDenied("TextEdit", "com.apple.TextEdit"), false);
 });
 
 const prompting = () => ({ ...structuredClone(DEFAULT_CONFIG), approval: "prompt" as const });

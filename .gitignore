@@ -1,4 +1,5 @@
 node_modules/
 native/windows/target/
+native/macos/build/
 *.log
 .env

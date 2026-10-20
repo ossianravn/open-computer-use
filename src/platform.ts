@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { release } from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { ToolError } from "./errors.ts";
@@ -8,7 +9,7 @@ import { HelperClient } from "./helper.ts";
 
 const run = promisify(execFile);
 
-export type InstalledApp = { name: string; id: string };
+export type InstalledApp = { name: string; id: string; processName?: string; bundleId?: string };
 
 /** What the server needs from a helper connection. */
 export type Helper = Pick<HelperClient, "call" | "close">;
@@ -20,8 +21,8 @@ export interface Platform {
   /** The helper executable in use. */
   readonly helperPath: string;
   installedApps(): Promise<InstalledApp[]>;
-  /** Start an installed app by Start-menu id, or a bare program name the shell resolves. */
-  launch(app: InstalledApp | { program: string }): Promise<void>;
+  /** Open an installed app; macOS returns the process, including an existing app. */
+  launch(app: InstalledApp | { program: string }): Promise<void | { pid: number }>;
   close(): void;
 }
 
@@ -94,6 +95,40 @@ class WindowsPlatform implements Platform {
   }
 }
 
+export function macosHelperPath(): string {
+  if (process.platform === "darwin" && Number.parseInt(release(), 10) < 23) {
+    throw new ToolError("unsupported_platform", "The macOS helper requires macOS 14 (Sonoma) or later. Upgrade macOS to use open-cu on this computer.");
+  }
+  const path = process.env.OCU_MACOS_HELPER ?? join(packageRoot(), "native", "macos", "bin", "ocu-mac");
+  if (!existsSync(path)) {
+    throw new ToolError("helper_missing", `The macOS helper (ocu-mac) is missing. Run \`npm run build:native\` in ${packageRoot()} with Xcode Command Line Tools installed, or set OCU_MACOS_HELPER.`);
+  }
+  return path;
+}
+
+class MacOSPlatform implements Platform {
+  readonly name = "macos";
+  readonly helperPath = macosHelperPath();
+  readonly helper = new HelperClient(this.helperPath);
+  private installed: { at: number; apps: InstalledApp[] } | undefined;
+
+  async installedApps(): Promise<InstalledApp[]> {
+    if (this.installed && Date.now() - this.installed.at < 5 * 60_000) return this.installed.apps;
+    const apps = await this.helper.call("installedApps", {});
+    this.installed = { at: Date.now(), apps };
+    return apps;
+  }
+
+  async launch(app: InstalledApp | { program: string }): Promise<{ pid: number }> {
+    if (!("id" in app)) {
+      throw new ToolError("app_not_found", `No installed macOS app matches "${app.program}". Use list_apps with include_installed=true and choose an exact app name.`);
+    }
+    return await this.helper.call("launchApp", { id: app.id });
+  }
+
+  close(): void { this.helper.close(); }
+}
+
 /**
  * Stands in where no helper can run (another OS, or a missing build). The server still
  * starts, so clients list its tools; every call explains the problem instead.
@@ -120,19 +155,19 @@ class UnavailablePlatform implements Platform {
 }
 
 export function createPlatform(): Platform {
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32" && process.platform !== "darwin") {
     return new UnavailablePlatform(
       process.platform,
       new ToolError(
         "unsupported_platform",
-        `open-cu runs on Windows 10/11 only so far; there is no helper for ${process.platform} yet. Tell the user this tool cannot operate apps on this computer.`,
+        `open-cu supports Windows 10/11 and macOS 14+; there is no helper for ${process.platform} yet. Tell the user this tool cannot operate apps on this computer.`,
       ),
     );
   }
   try {
-    return new WindowsPlatform();
+    return process.platform === "darwin" ? new MacOSPlatform() : new WindowsPlatform();
   } catch (error) {
-    if (error instanceof ToolError) return new UnavailablePlatform("windows", error);
+    if (error instanceof ToolError) return new UnavailablePlatform(process.platform === "darwin" ? "macos" : "windows", error);
     throw error;
   }
 }

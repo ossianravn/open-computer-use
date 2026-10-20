@@ -11,6 +11,8 @@ export type WindowInfo = {
   pid: number;
   processName: string;
   exePath: string | null;
+  /** macOS bundle identity, used alongside the executable for hard blocks. */
+  bundleId?: string;
   rect: Rect;
   minimized: boolean;
   maximized: boolean;
@@ -78,7 +80,7 @@ export type Screenshot = {
   mimeType: string;
   width: number;
   height: number;
-  /** Screen pixels per image pixel: screen = origin + image * scale. */
+  /** Native screen units per image pixel (macOS points, Windows pixels). */
   scale: number;
   origin: Rect;
   source: "window" | "screen";
@@ -96,7 +98,10 @@ export type GuardStatus = {
 };
 
 export type HelperMethods = {
-  ping: { params: Record<string, never>; result: { version: string; platform: string } };
+  ping: { params: Record<string, never>; result: { version: string; platform: string; permissions?: { accessibility: boolean; screenRecording: boolean; inputMonitoring: boolean } } };
+  /** macOS-only app discovery and launch; Windows uses its Start menu adapter. */
+  installedApps: { params: Record<string, never>; result: { name: string; id: string; processName?: string; bundleId?: string }[] };
+  launchApp: { params: { id: string }; result: { ok: true; pid: number } };
   listWindows: { params: { includeAll?: boolean }; result: WindowInfo[] };
   snapshot: {
     params: { hwnd: number; maxNodes?: number; maxDepth?: number; includeOffscreen?: boolean; raw?: boolean; maxValueLength?: number };

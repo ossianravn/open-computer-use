@@ -1,23 +1,24 @@
 # Working on open-cu
 
-An MCP server and CLI (TypeScript, `src/`) over a native platform helper (Rust,
-`native/windows/`). Read [docs/architecture.md](docs/architecture.md) before changing the
-helper protocol, the state model or the rendering.
+An MCP server and CLI (TypeScript, `src/`) over a native platform helper (Rust in
+`native/windows/`, Swift in `native/macos/`). Read [docs/architecture.md](docs/architecture.md)
+before changing the helper protocol, the state model or the rendering.
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
 | `npm install` | Install dependencies. |
-| `npm run build:native` | Build `ocu-win.exe` and copy it to `native/windows/bin/`. |
+| `npm run build:native` | Build the host helper: Windows Rust or macOS universal Swift binary. |
 | `npm run build:js` | Bundle `dist/cli.mjs`. |
 | `npm run check` | Type-check (TypeScript 7). |
 | `npm test` | Unit tests; no desktop needed. |
-| `npm run test:e2e` | Drives the fixture through a real MCP client (Windows). `OCU_E2E_JEV=1` adds Jev cases. |
+| `npm run test:e2e` | Drives the host fixture through a real MCP client (Windows or macOS). `OCU_E2E_JEV=1` adds Jev cases. |
 | `cargo test --manifest-path native/windows/Cargo.toml` | Rust unit tests. |
 | `node src/cli.ts <command>` | Run from source; Node 22.18+ strips types. |
 
-Installed MCP servers run `dist/cli.mjs` and `native/windows/bin/ocu-win.exe`. After
+Installed MCP servers run `dist/cli.mjs` and the host helper (`ocu-win.exe` or
+`native/macos/bin/ocu-mac`). After
 changing `src/`, run `npm run build:js`; new agent sessions pick it up. A running
 session keeps `ocu-win.exe` open, so `npm run build:native` cannot replace it until
 those sessions end (or point `OCU_WINDOWS_HELPER` at another build).
@@ -26,9 +27,9 @@ those sessions end (or point `OCU_WINDOWS_HELPER` at another build).
 
 The repository is the plugin: GitHub installs in every client copy it as is.
 
-- **Shipped files:** `dist/cli.mjs` (all JS dependencies bundled) and
-  `native/windows/bin/ocu-win.exe` are committed. Rebuild whichever one your change
-  affects, then run `npm run validate` before committing. It fails when an artifact is
+- **Shipped files:** `dist/cli.mjs` (all JS dependencies bundled),
+  `native/windows/bin/ocu-win.exe`, and `native/macos/bin/ocu-mac` are committed. Rebuild
+  whichever one your change affects, then run `npm run validate` before committing. It fails when an artifact is
   older than its sources or when versions disagree.
 - **Manifests:**
   - portable `plugin.json` + `mcp.json` + `skills/` (Codex reads these);
@@ -59,6 +60,10 @@ properties), because Node runs the sources directly. Use `.ts` extensions in imp
   address it by window id.
 - Use a scratch config (`OCU_CONFIG=<temp>/config.json` with `{"approval":"all"}`) so
   tests never write to `~/.open-cu`.
+- On macOS, use the disposable AppKit fixture (`fixtures/macos/main.swift`) via
+  `tests/e2e/macos.test.ts`. It compiles into a temporary app bundle and cleans up
+  its own process and files. Live tests require Accessibility, Screen Recording and
+  a working Esc guard; a missing permission is a failure, not a passing skip.
 - Calculator is a safe UWP target (`launch_app "Calculator"`); its labels follow the OS
   language.
 

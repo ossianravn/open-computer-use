@@ -4,6 +4,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const problems = [];
@@ -63,10 +64,29 @@ const newest = (dir, pattern) => {
 const artifact = (path, sourceDir, pattern, rebuild) => {
   const full = join(root, path);
   if (!existsSync(full)) return problems.push(`${path} is missing; run ${rebuild}`);
-  if (statSync(full).mtimeMs < newest(sourceDir, pattern)) problems.push(`${path} is older than ${sourceDir}; run ${rebuild}`);
+  if (statSync(full).mtimeMs < newest(sourceDir, pattern) && !committedTogether(path, sourceDir)) {
+    problems.push(`${path} is older than ${sourceDir}; run ${rebuild}`);
+  }
+};
+// A fresh clone writes files in checkout order, not build order. Accept a clean
+// committed artifact only if its last commit also contains the latest sources.
+// Dirty/untracked sources still require a rebuild; no cross-compilation is needed
+// merely to validate the other platform's unchanged, committed binary.
+const committedTogether = (path, sourceDir) => {
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (git("status", "--porcelain", "--untracked-files=all", "--", path, sourceDir)) return false;
+    const artifactCommit = git("log", "-1", "--format=%H", "--", path);
+    if (!artifactCommit) return false;
+    git("diff", "--quiet", artifactCommit, "HEAD", "--", sourceDir);
+    return true;
+  } catch { return false; }
 };
 artifact("dist/cli.mjs", "src", /\.ts$/, "npm run build:js");
 artifact("native/windows/bin/ocu-win.exe", "native/windows/src", /\.rs$/, "npm run build:native");
+artifact("native/macos/bin/ocu-mac", "native/macos/Sources", /\.swift$/, "npm run build:native on macOS");
+const macVersion = read("native/macos/Sources/main.swift").match(/"version": "([^"]+)"/)?.[1];
+if (macVersion !== pkg.version) problems.push(`macOS helper version ${macVersion} differs from package.json ${pkg.version}`);
 
 if (problems.length) {
   console.error(`validate: ${problems.length} problem(s)\n- ${problems.join("\n- ")}`);

@@ -208,7 +208,7 @@ export function createServer(config: Config): { server: McpServer; computer: Com
 
   tool(
     "click",
-    "Click an element (by element_index or target) or a point in the latest screenshot (x, y). Element clicks use UI Automation (invoke, toggle, select, expand) when the element supports it, else a real mouse click.",
+    "Click an element (by element_index or target) or a point in the latest screenshot (x, y). Element clicks use native accessibility (invoke, toggle, select, expand) when the element supports it, else a real mouse click.",
     {
       app,
       window: windowId,
@@ -245,7 +245,7 @@ export function createServer(config: Config): { server: McpServer; computer: Com
 
   tool(
     "press_key",
-    'Press a key or chord in xdotool syntax: "Return", "Escape", "Tab", "ctrl+s", "ctrl+shift+Tab", "Page_Down", "F5". Windows-key chords are blocked.',
+    'Press a key or chord in xdotool syntax: "Return", "Escape", "Tab", "ctrl+s", "cmd+s", "Page_Down", "F5". Use cmd on macOS, ctrl on Windows. Shortcuts that reach the OS shell are blocked.',
     {
       app,
       window: windowId,

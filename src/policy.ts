@@ -38,6 +38,23 @@ export const LAUNCH_DENIED = [
 /** AI agent hosts: driving them could let an agent approve its own requests. */
 const AGENT_APPS = ["claude.exe", "chatgpt.exe", "codex.exe"];
 
+const MACOS_TERMINALS = ["terminal", "iterm2", "iterm", "warp", "ghostty", "alacritty", "kitty", "wezterm", "wezterm-gui", "hyper", "tabby", "rio"];
+const MACOS_PASSWORD_MANAGERS = ["passwords", "1password", "1password 7", "bitwarden", "keepassxc", "lastpass", "dashlane", "nordpass", "proton pass", "protonpass", "enpass", "keeper", "roboform", "keychain access"];
+const MACOS_SYSTEM_APPS = ["system settings", "system preferences", "securityagent", "securityhost", "authorizationhost", "coreautha", "loginwindow", "activity monitor", "disk utility", "directory utility", "migration assistant", "installer", "software update", "malwarebytes", "sophos", "sentinelone", "falcon"];
+const MACOS_BLOCKED_BUNDLES = [
+  "com.apple.terminal", "com.googlecode.iterm2", "dev.warp.warp-stable", "com.mitchellh.ghostty", "net.kovidgoyal.kitty", "org.alacritty", "com.github.wez.wezterm",
+  "com.apple.passwords", "com.apple.keychainaccess", "com.1password.1password", "com.agilebits.onepassword7", "com.bitwarden.desktop", "org.keepassxc.keepassxc",
+  "com.apple.systempreferences", "com.apple.securityagent", "com.apple.securityhost", "com.apple.authorizationhost", "com.apple.coreautha", "com.apple.loginwindow",
+  "com.apple.activitymonitor", "com.apple.diskutility", "com.apple.installer", "com.apple.directoryutility",
+];
+const MACOS_AGENT_BUNDLES = ["com.anthropic.claudefordesktop", "com.openai.chat", "com.openai.codex"];
+const MACOS_LAUNCH_DENIED = ["sh", "bash", "zsh", "fish", "osascript", "script editor", "automator", "shortcuts", "python", "python3", "node", "ruby", "perl", "swift", "pwsh"];
+
+export function isLaunchDenied(program: string, bundleId?: string): boolean {
+  return LAUNCH_DENIED.includes(program.toLowerCase()) || MACOS_LAUNCH_DENIED.includes(program.toLowerCase()) ||
+    ["com.apple.scripteditor2", "com.apple.automator", "com.apple.shortcuts"].includes(bundleId?.toLowerCase() ?? "");
+}
+
 export type AppIdentity = { exe: string; label: string };
 
 export function appIdentity(window: Pick<WindowInfo, "processName" | "title" | "pid">): AppIdentity {
@@ -50,16 +67,17 @@ export type BlockReason = { code: "app_blocked"; message: string };
 export function blockReason(window: WindowInfo, config: Config): BlockReason | undefined {
   const exe = window.processName.toLowerCase();
   const className = window.className.toLowerCase();
+  const bundleId = window.bundleId?.toLowerCase() ?? "";
   const refuse = (why: string): BlockReason => ({
     code: "app_blocked",
     message: `open-cu is not allowed to use ${window.processName || window.title} (${why}). Ask the user to do this step themselves.`,
   });
-  if (TERMINAL_PROCESSES.includes(exe) || TERMINAL_WINDOW_CLASSES.includes(className)) {
+  if (TERMINAL_PROCESSES.includes(exe) || MACOS_TERMINALS.includes(exe) || TERMINAL_WINDOW_CLASSES.includes(className)) {
     return refuse("terminals are never driven; use your own shell tool, where the user's permissions apply");
   }
-  if (PASSWORD_MANAGERS.includes(exe)) return refuse("password managers are off limits");
-  if (SECURITY_AND_SYSTEM.includes(exe)) return refuse("security, sign-in and system administration tools are off limits");
-  if (!config.allowAgentApps && AGENT_APPS.includes(exe)) return refuse("AI agent apps are off limits");
+  if (PASSWORD_MANAGERS.includes(exe) || MACOS_PASSWORD_MANAGERS.includes(exe)) return refuse("password managers are off limits");
+  if (SECURITY_AND_SYSTEM.includes(exe) || MACOS_SYSTEM_APPS.includes(exe) || MACOS_BLOCKED_BUNDLES.includes(bundleId)) return refuse("protected macOS or Windows apps are off limits");
+  if (!config.allowAgentApps && (AGENT_APPS.includes(exe) || ["claude", "chatgpt", "codex", "orca"].includes(exe) || MACOS_AGENT_BUNDLES.includes(bundleId))) return refuse("AI agent apps are off limits");
   if (config.blockedApps.some((name) => name.toLowerCase() === exe)) return refuse("blocked in the user's config");
   return undefined;
 }
@@ -70,8 +88,21 @@ export function assertNotBlocked(window: WindowInfo, config: Config): void {
 }
 
 /** Key chords that reach the OS shell rather than the app. */
-export function assertKeyAllowed(key: string): void {
+export function assertKeyAllowed(key: string, platform = "windows"): void {
   const parts = key.toLowerCase().split("+").map((part) => part.trim());
+  if (platform === "macos") {
+    const command = parts.some((part) => ["cmd", "command", "meta", "super", "super_l", "super_r"].includes(part));
+    const control = parts.some((part) => ["ctrl", "control", "control_l", "control_r"].includes(part));
+    const option = parts.some((part) => ["alt", "option", "alt_l", "alt_r"].includes(part));
+    const last = parts.at(-1);
+    if ((command && ["space", "tab", "grave"].includes(last ?? "")) ||
+        (command && option && ["escape", "esc"].includes(last ?? "")) ||
+        (command && control && last === "q") ||
+        (control && ["up", "down", "left", "right", "f2", "f3", "f8"].includes(last ?? ""))) {
+      throw new ToolError("key_blocked", "This shortcut controls the macOS shell instead of the target app.");
+    }
+    return;
+  }
   if (parts.some((part) => ["super", "super_l", "super_r", "win", "windows", "meta"].includes(part))) {
     throw new ToolError(
       "key_blocked",

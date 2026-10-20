@@ -85,6 +85,7 @@ The Jev key is looked up in this order:
 | `OCU_USER_ACTIVE_MS` | ms (default 700) | How long physical input pauses synthetic input. |
 | `OCU_KEY_DELAY_MS` | ms (default 5) | Pause between typed keys. |
 | `OCU_WINDOWS_HELPER` | path | Use another `ocu-win.exe`. |
+| `OCU_MACOS_HELPER` | path | Use another `ocu-mac` (macOS 14+). |
 | `TYPESAFE_API_KEY` | key | The Jev key (takes precedence over files). |
 
 The command-line flags `--jev` and `--no-jev` override Jev for one run.

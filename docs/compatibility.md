@@ -50,8 +50,8 @@ helper, adapter, manifests, skill, docs, license and readme.
   cancelled open-cu's approval prompt without showing it. Version 0.2.0 reported that
   cancellation as "the user declined" and blocked the agent. Since 0.2.1, approval
   defaults to `all`, and a cancelled prompt is no longer treated as a refusal.
-- **Other platforms:** on macOS and Linux the server starts and every tool reports
-  that only Windows is supported. No helper exists there yet.
+- **Linux:** the server starts, but desktop tools report that no Linux helper exists.
+  The macOS implementation and its verification are recorded below.
 - **Code signing:** the prebuilt `ocu-win.exe` is unsigned. Security software that
   dislikes unsigned programs with keyboard hooks may flag it; rebuilding from source
   with `npm run build:native` produces the same program.
@@ -79,3 +79,51 @@ Same date and machine:
   - With default settings it is absent from screen capture.
 
 See [architecture.md](architecture.md#typing) for the typing behaviour found in Notepad.
+
+## macOS port (20 October 2026)
+
+Host: macOS 26.6 (25G72), Apple silicon, Node 24.15.0. The helper targets macOS 14+
+and is built as a universal arm64/x86_64 executable with the installed Xcode Swift
+compiler. `lipo -archs` confirms both slices; `codesign --verify` accepts its ad-hoc
+signature. Neither a compiler nor npm dependency installation is needed by a
+packaged MCP consumer.
+
+Final checks: `npm run check` passes; all **28 unit tests** pass; `npm run test:e2e`
+passes **9 macOS cases** and skips the 8 Windows cases on this host.
+`npm run validate`, `git diff --check`, universal-architecture inspection and
+code-signature verification pass.
+
+The live MCP suite uses only a temporary AppKit fixture bundle and a scratch
+`OCU_CONFIG`; teardown terminates its process and removes its files. It covers
+window discovery, installed-app discovery and launch, AX form actions and batches,
+Unicode typing, Command shortcuts, stable indices, stale snapshots, secondary text
+reads, helper-restart identities, screenshots, coordinate conversion, physical clicking/dragging, resize
+rejection, numeric and pop-up controls, scrolling, physical sheet controls, the overlay, and a simulated
+foreign Escape that latches the guard and blocks further actions. No user-owned
+app receives test input.
+
+Packaging is checked with `npm pack`, installation of that tarball into a temporary
+npm prefix, and `scripts/check-installed.mjs` against the installed bundled CLI.
+The installed server exposes all 12 tools and successfully runs `list_apps`; its
+`doctor` identifies `ocu-mac` and reports working permissions and input guard.
+A separate restricted run confirms missing Accessibility and Screen Recording
+produce explicit errors rather than silent success.
+
+Remaining coverage limits:
+
+- Intel and macOS 14 are build targets, not live-tested hosts in this run.
+- The eight Windows E2E cases skip on macOS; Windows source and its shipped binary
+  are unchanged. Cross-platform unit tests and TypeScript checks run on macOS.
+- Jev is off; no external model or paid service is needed by the macOS suite.
+- Browser content, multiple displays, Spaces/fullscreen transitions, and the visual
+  rendering of the overlay have not been separately validated on macOS.
+- Claude/Codex/OpenCode-specific installer flows retain their existing manifests;
+  the fresh macOS install check exercises the npm package and real MCP stdio path.
+- The macOS helper is ad-hoc signed, without Developer ID signing or notarization.
+  Gatekeeper handling of browser-downloaded archives is not tested.
+
+The artifact validator also handles fresh-checkout timestamps: an unchanged binary
+is accepted only when its last committed version contains the current source tree.
+Dirty, untracked, or subsequently committed source changes still require rebuilding.
+A regression test covers those cases, so macOS validation does not require rebuilding
+the untouched Windows helper.

@@ -1,7 +1,7 @@
 {
   "name": "@ossianravn/open-cu",
   "version": "0.2.1",
-  "description": "Open Computer Use for any AI agent: operate Windows desktop apps through their accessibility tree over MCP, with optional TypeSafe Jev targeting.",
+  "description": "Open Computer Use for any AI agent: operate Windows and macOS desktop apps through their accessibility tree over MCP, with optional TypeSafe Jev targeting.",
   "license": "MIT",
   "author": "ossianravn",
   "type": "module",
@@ -26,6 +26,7 @@
     "opencode",
     "dist",
     "native/windows/bin",
+    "native/macos/bin",
     "skills",
     "plugin.json",
     "mcp.json",

@@ -205,3 +205,51 @@ in time.
   The server waits and retries for about 5 s before passing that on, so a user typing
   elsewhere only delays the agent. Synthetic input carries the injected flag and is
   ignored.
+
+## macOS helper
+
+`native/macos/Sources/` implements the same NDJSON protocol in Swift using public
+macOS APIs. `npm run build:native` on macOS produces an ad-hoc-signed universal
+`native/macos/bin/ocu-mac` (arm64 and x86_64, macOS 14+). The TypeScript platform
+adapter selects it on Darwin; `OCU_MACOS_HELPER` can point to a development build.
+
+- **Windows and ownership:** Core Graphics supplies window IDs and frames;
+  NSRunningApplication supplies the executable and bundle identity. Public AX APIs
+  do not provide a CGWindowID, so the helper matches AX windows within the owning
+  process by frame and title and refuses ambiguous matches. Physical input requires
+  the requested window to become foreground and hit testing to resolve to that
+  window. Window IDs retain the protocol's `hwnd` field name.
+- **Accessibility:** AX roles map to the existing wire roles, preserving the rendered
+  text grammar. Native AX actions are preferred to mouse input. Each window retains
+  its latest AX elements, with snapshot IDs checked before actions. AX element hashes
+  and process IDs provide identities across snapshots. Secure fields omit values and
+  reject read/write actions. Modal AXPress calls return `pending` while the worker
+  finishes; the input guard remains responsive on the main run loop.
+- **Coordinates and screenshots:** macOS AX and CGEvent use top-left global display
+  points. ScreenCaptureKit captures the selected window independently of overlapping
+  windows, with shadows removed. `scale` is display points per image pixel, so Retina
+  captures and downscaling use the existing screenshot coordinate mapping. A full
+  screen capture means the main display and excludes the helper's overlay windows.
+- **Keyboard and guard:** CGEvent Unicode packets enter text; shortcuts use native
+  virtual key codes and explicit modifier press/release events. `cmd` is Command,
+  while `ctrl` remains Control. A listen-only event tap keeps timestamps for user
+  activity and Esc, ignoring the helper's tagged synthetic events. All actions fail
+  closed if this guard is unavailable. Physical Esc stops actions for 20 seconds;
+  recent physical input causes the same `user_active` retry behavior as Windows.
+- **Permissions:** `ping` reports Accessibility, Screen Recording and Input Monitoring
+  preflight status. AX reads require Accessibility; captures require Screen Recording.
+  Missing grants produce actionable errors. Neither the helper nor the MCP tools
+  can grant permissions. App policy checks both process names and macOS bundle IDs.
+- **Overlay:** nonactivating, click-through NSPanel strips outline the target display
+  with a usage label. A main-thread timer hides it after inactivity; Esc hides it
+  immediately. The helper's own windows never appear in app listings or captures.
+- **Applications:** the macOS adapter uses two additional helper methods,
+  `installedApps` and `launchApp`. They enumerate app bundles in the system and user
+  Applications directories, plus running app bundles elsewhere, and use NSWorkspace
+  to launch a selected bundle. There
+  is no shell or script fallback. The server checks the selected bundle's actual
+  executable and bundle ID before launch, including fuzzy-name matches.
+
+API references: [AXIsProcessTrusted](https://developer.apple.com/documentation/applicationservices/1460720-axisprocesstrusted),
+[CGEvent](https://developer.apple.com/documentation/coregraphics/cgevent),
+[ScreenCaptureKit screenshots](https://developer.apple.com/documentation/screencapturekit/scscreenshotmanager).

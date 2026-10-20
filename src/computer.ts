@@ -7,7 +7,7 @@ import { type Config, LAST_CLIENT_FILE, loadConfig } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
 import type { Platform } from "./platform.ts";
-import { Approvals, type AskUser, LAUNCH_DENIED, appIdentity, assertKeyAllowed, assertNotBlocked, blockReason } from "./policy.ts";
+import { Approvals, type AskUser, appIdentity, assertKeyAllowed, assertNotBlocked, blockReason, isLaunchDenied } from "./policy.ts";
 import type { ElementActionResult, HelperMethods, WindowInfo } from "./protocol.ts";
 import { IdentityMap, type StateNode, WindowState } from "./state.ts";
 import { type Purpose, describeCandidate } from "./targets.ts";
@@ -106,6 +106,10 @@ export class Computer {
 
   private get helper() {
     return this.platform.helper;
+  }
+
+  private get accessibilityName(): string {
+    return this.platform.name === "macos" ? "macOS Accessibility" : "UI Automation";
   }
 
   get identityMaps(): Map<number, IdentityMap> {
@@ -419,31 +423,32 @@ export class Computer {
     if (/[\\/:]/.test(name)) throw new ToolError("bad_params", "Launch apps by name (as listed by list_apps with include_installed), not by path.");
     const installed = await this.platform.installedApps();
     const lower = name.toLowerCase();
-    const matches = installed.filter((app) => app.name.toLowerCase() === lower || app.id.toLowerCase() === lower);
+    const alias = aliasExe(name, this.platform.name)?.toLowerCase();
+    const matches = installed.filter((app) => app.name.toLowerCase() === lower || app.id.toLowerCase() === lower || app.bundleId?.toLowerCase() === lower || (alias && app.processName?.toLowerCase() === alias));
     // Start-menu names are localized ("Lommeregner"); package ids are not ("Microsoft.WindowsCalculator…").
     const compact = lower.replace(/\s+/g, "");
     const byId = (app: { id: string }) => (app.id.split("!")[0] ?? "").toLowerCase().split(/[._]/).some((part) => part === compact || part === `windows${compact}`);
     const loose = matches.length
       ? matches
       : installed.filter((app) => app.name.toLowerCase().includes(lower)).concat(installed.filter((app) => !app.name.toLowerCase().includes(lower) && byId(app)));
-    const program = aliasExe(name) ?? (/\.exe$/i.test(name) ? name : `${name}.exe`);
+    if (loose.length > 1 && !matches.length) {
+      throw new ToolError("app_ambiguous", `Several installed apps match "${name}": ${loose.slice(0, 8).map((app) => app.name).join(", ")}. Use the exact name.`);
+    }
+    const program = loose[0]?.processName ?? aliasExe(name, this.platform.name) ?? (this.platform.name === "macos" || /\.exe$/i.test(name) ? name : `${name}.exe`);
     const fake: WindowInfo = {
-      hwnd: 0, title: name, className: "", pid: 0, processName: program, exePath: null,
+      hwnd: 0, title: name, className: "", pid: 0, processName: program, exePath: null, bundleId: loose[0]?.bundleId,
       rect: { x: 0, y: 0, width: 0, height: 0 }, minimized: false, maximized: false, foreground: false, enabled: true, owner: null, appWindow: true, dpi: 96,
     };
     assertNotBlocked(fake, this.config);
-    if (LAUNCH_DENIED.includes(program.toLowerCase())) {
+    if (isLaunchDenied(program, loose[0]?.bundleId)) {
       throw new ToolError("app_blocked", `launch_app does not start shells or script hosts (${program}). Use your own shell tool.`);
     }
     const before = new Set((await this.helper.call("listWindows", { includeAll: true })).map((w) => w.hwnd));
-    if (loose.length === 1 || matches.length) await this.platform.launch(loose[0]!);
-    else if (loose.length > 1) {
-      throw new ToolError("app_ambiguous", `Several installed apps match "${name}": ${loose.slice(0, 8).map((app) => app.name).join(", ")}. Use the exact name.`);
-    } else await this.platform.launch({ program: name });
+    const launched = await this.platform.launch(loose[0] ?? { program: name });
 
     for (let waited = 0; waited < 15_000; waited += 250) {
       await sleep(250);
-      const fresh = (await this.helper.call("listWindows", {})).filter((w) => !before.has(w.hwnd));
+      const fresh = (await this.helper.call("listWindows", {})).filter((w) => launched ? w.pid === launched.pid : !before.has(w.hwnd));
       const window = fresh.find((w) => blockReason(w, this.config) === undefined) ?? fresh[0];
       if (window) {
         assertNotBlocked(window, this.config);
@@ -452,7 +457,7 @@ export class Computer {
         };
       }
     }
-    return { text: `Asked Windows to start ${loose[0]?.name ?? name}, but no new window appeared within 15 s. It may already be running; call list_apps.` };
+    return { text: `Asked ${this.platform.name === "macos" ? "macOS" : "Windows"} to start ${loose[0]?.name ?? name}, but no new window appeared within 15 s. It may already be running; call list_apps.` };
   }
 
   async getAppState(args: StateArgs): Promise<ToolOutput> {
@@ -529,7 +534,7 @@ export class Computer {
       if (action) {
         const result = await this.elementCall(state, node, action);
         return {
-          how: `via UI Automation (${action})${result.pending ? "; the app is still handling it (it may have opened a modal dialog)" : ""}`,
+          how: `via ${this.accessibilityName} (${action})${result.pending ? "; the app is still handling it (it may have opened a modal dialog)" : ""}`,
           pending: !!result.pending,
         };
       }
@@ -582,7 +587,7 @@ export class Computer {
       summary.push(await this.chooseOption(state, node, args.value));
     } else if (node.focusable) {
       await this.elementCall(state, node, "focus");
-      await this.input("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
+      await this.input("pressKey", { key: this.platform.name === "macos" ? "cmd+a" : "ctrl+a", hwnd: state.hwnd });
       await this.input("typeText", { text: args.value, hwnd: state.hwnd });
       summary.push(`Element ${node.index} has no settable value; focused it, selected all and typed the value instead.`);
     } else {
@@ -638,7 +643,7 @@ export class Computer {
   }
 
   async pressKey(args: PressKeyArgs): Promise<ToolOutput> {
-    assertKeyAllowed(args.key);
+    assertKeyAllowed(args.key, this.platform.name);
     const { state, before, beforeWindows, note } = await this.begin(args);
     await this.input("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
     const summary = [...(note ? [note] : []), `Pressed ${args.key}${(args.repeat ?? 1) > 1 ? ` ×${args.repeat}` : ""}.`];
@@ -674,7 +679,7 @@ export class Computer {
           page: whole,
           amount: whole ? pages : Math.max(1, Math.round(pages * 4)),
         });
-        summary.push(`Scrolled ${container.index} ${clean(container.name) || container.role} ${args.direction} by ${pages} page(s) via UI Automation.`);
+        summary.push(`Scrolled ${container.index} ${clean(container.name) || container.role} ${args.direction} by ${pages} page(s) via ${this.accessibilityName}.`);
       } else {
         await wheel(await this.centerOf(state, node));
         summary.push(`Scrolled ${args.direction} with the mouse wheel over ${node.index}.`);
@@ -807,7 +812,11 @@ export class Computer {
     const built = this.platform.helperPath
       ? new Date(statSync(this.platform.helperPath).mtimeMs).toISOString().replace("T", " ").slice(0, 19)
       : "n/a";
-    lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
+    lines.push(`Helper: ${ping.platform === "macos" ? "ocu-mac" : "ocu-win"} ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
+    if (ping.permissions) {
+      lines.push(`macOS permissions: Accessibility ${ping.permissions.accessibility ? "granted" : "missing"}; Screen Recording ${ping.permissions.screenRecording ? "granted" : "missing"}; Input Monitoring ${ping.permissions.inputMonitoring ? "granted" : "missing"}.`);
+      if (!ping.permissions.accessibility || !ping.permissions.screenRecording) lines.push("Enable missing permissions for the app running open-cu in System Settings > Privacy & Security, then restart the MCP session.");
+    }
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);
     lines.push(
@@ -816,7 +825,7 @@ export class Computer {
     lines.push(`Approval mode: ${this.config.approval}; approved apps: ${this.config.approvedApps.join(", ") || "none"}`);
     const status = this.jev?.status();
     lines.push(`Jev: ${status ? (status.ready ? `ready (model ${status.model})` : status.reason) : "off"}`);
-    const windows = await this.helper.call("listWindows", {});
+    const windows = ping.permissions?.accessibility === false ? [] : await this.helper.call("listWindows", {});
     lines.push(`Visible app windows: ${windows.length}`);
     try {
       const last = JSON.parse(readFileSync(LAST_CLIENT_FILE, "utf8")) as { at: string; client?: { name: string; version: string }; elicitation: boolean };
