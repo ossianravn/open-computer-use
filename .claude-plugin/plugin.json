@@ -2,10 +2,10 @@
   "name": "open-cu",
   "version": "0.2.1",
   "author": { "name": "ossianravn", "url": "https://github.com/ossianravn" },
-  "description": "Operate Windows desktop apps from your coding agent through their accessibility tree, with optional TypeSafe Jev targeting.",
+  "description": "Operate Windows and macOS desktop apps from your coding agent through their accessibility tree, with optional TypeSafe Jev targeting.",
   "repository": "https://github.com/ossianravn/open-computer-use",
   "license": "MIT",
-  "keywords": ["computer-use", "desktop", "ui-automation", "accessibility", "mcp", "windows"],
+  "keywords": ["computer-use", "desktop", "ui-automation", "accessibility", "mcp", "windows", "macos"],
   "mcpServers": {
     "open-cu": {
       "command": "node",

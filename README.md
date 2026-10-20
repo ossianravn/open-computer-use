@@ -2,12 +2,12 @@
 
 ![open-cu: computer use for every agent. Claude Code, Codex, OpenCode and any MCP client.](docs/assets/header.jpg)
 
-[![Version 0.2.1](https://img.shields.io/badge/version-v0.2.1-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
+[![Version 0.2.1](https://img.shields.io/badge/version-v0.2.1-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555555)](#macos-permissions) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
 
 **Let your coding agent use the apps on your computer.**
 
 open-cu (Open Computer Use) lets **Claude Code, Codex, OpenCode or any MCP client** read
-and operate Windows desktop apps. It can open an app, read its window, click buttons,
+and operate Windows and macOS desktop apps. It can open an app, read its window, click buttons,
 fill in forms and type, and it reports back only what changed. It speaks the same tool
 language as OpenAI's Codex Computer Use, but it is open source and works with any agent.
 With the optional **TypeSafe Jev** model, your agent can simply *describe* what to click.
@@ -58,9 +58,10 @@ when it already knows what it wants.
 
 ## Install
 
-You need **Windows 10 or 11 (x64)**, [Node.js 22.18+ with npm](https://nodejs.org/en/download),
+You need **Windows 10 or 11 (x64)** or **macOS 14+ (Apple silicon or Intel)**, [Node.js 22.18+ with npm](https://nodejs.org/en/download),
 [Git](https://git-scm.com/downloads), and your agent app. There is nothing to build:
-the plugin ships its Windows helper ready to run.
+the plugin ships both native helpers ready to run. On macOS, grant the permissions
+described below before using the tools.
 
 > [!IMPORTANT]
 > This repository is currently private. The GitHub account that Git uses on your
@@ -74,6 +75,22 @@ Choose your client:
 | **Codex** | [Register the marketplace, then install in Plugins](#codex) |
 | **OpenCode v2** | [Run one install command](#opencode-v2) |
 | **Anything else that speaks MCP** | [Add one server entry](#any-other-mcp-client) |
+
+### macOS permissions
+
+Run `open-cu doctor` from the same app that runs your MCP server. In
+**System Settings → Privacy & Security**, enable **Accessibility** for that app (your agent or terminal),
+and **Screen & System Audio Recording** for screenshots. Some macOS versions label
+this **Screen Recording**. If the Esc guard is unavailable, also enable **Input
+Monitoring** for the host app. Restart the MCP session after changing permissions.
+
+The helper reports each missing permission and does not approve itself. Reading the
+Accessibility tree does not require Screen Recording; screenshots do. Actions remain
+disabled if the Esc guard cannot start. Use `cmd` shortcuts on macOS, such as `cmd+s`.
+
+The macOS helper is ad-hoc signed, not Developer ID signed or notarized. Distribution
+through downloaded ZIP files may require the user's Gatekeeper approval. Building it
+locally requires Xcode Command Line Tools (`npm run build:native`).
 
 ### Claude Code
 
@@ -149,7 +166,7 @@ Start a new Claude Code session, or enter `/reload-plugins` in an open one.
 **In the desktop app**
 
 1. Open a local Codex chat and paste this request. Codex uses its own command-line tool
-   to register the marketplace for your Windows user:
+   to register the marketplace for your user account:
 
    ```text
    Add the open-cu plugin marketplace for me by running:
@@ -264,7 +281,7 @@ label at the top, so you always know when an agent is in control:
 
 <img src="docs/assets/overlay.png" width="520" alt="The open-cu overlay: a blue glow along the screen edge and a dark label reading 'open-cu is using Fixture · Esc to stop'">
 
-The agent launches Calculator, presses the buttons through Windows' accessibility
+The agent launches Calculator, presses the buttons through the native accessibility
 interface (your mouse pointer doesn't move), and reports `42`. Press **Esc** at any
 time to stop it.
 
@@ -328,14 +345,14 @@ More detail in [docs/jev.md](docs/jev.md).
 
 | Tool | What it does |
 |---|---|
-| `list_apps` | Open apps and their windows; `include_installed` adds Start-menu apps |
+| `list_apps` | Open apps and their windows; `include_installed` adds installed apps |
 | `launch_app` | Start an installed app by name (localized names work) |
 | `get_app_state` | Read a window as numbered lines, plus a screenshot when needed |
 | `find_element` | Rank the elements matching a description, without acting |
 | `click` | By element number, by description, or at screenshot coordinates |
 | `set_value` | Replace a field, combo box or slider value, and check that it took |
 | `type_text` | Type text, with any keyboard layout, accents and emoji |
-| `press_key` | Keys and shortcuts such as `ctrl+s`, `Return`, `Page_Down` |
+| `press_key` | Keys and shortcuts such as `ctrl+s` / `cmd+s`, `Return`, `Page_Down` |
 | `scroll` | Scroll a list, document or page |
 | `drag` | Drag between two screenshot points |
 | `perform_secondary_action` | Expand, Collapse, Show Menu, Toggle, Select, Read Text and more |
@@ -374,7 +391,7 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
   - security and antivirus tools;
   - sign-in and administrator (UAC) prompts;
   - AI agent apps (Claude, ChatGPT, Codex);
-  - Windows-key shortcuts.
+  - Windows-key shortcuts, and macOS shortcuts for Spotlight, app switching, Force Quit and the lock screen.
 - **You can see when it's working.** A blue glow around the screen, with the label
   "open-cu is using *App* · Esc to stop", appears while an agent uses an app. It fades
   out after 15 seconds without activity.
@@ -393,13 +410,14 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
 ## How it works
 
 ```text
-your agent ──MCP──▶ open-cu (Node) ──▶ ocu-win.exe (Rust)
-                    tools, safety,       Windows UI Automation,
-                    diffs, Jev           input, screenshots
+your agent ──MCP──▶ open-cu (Node) ──▶ native helper
+                    tools, safety,       Windows: Rust / UI Automation
+                    diffs, Jev           macOS: Swift / Accessibility + ScreenCaptureKit
 ```
 
-A small Rust helper reads windows through Windows UI Automation in a single request per
-read. It acts through the controls' own accessibility actions where it can, and falls
+The Windows Rust helper reads windows through UI Automation in a single request per
+read. The macOS Swift helper uses Accessibility, CGEvent input and ScreenCaptureKit.
+It acts through the controls' own accessibility actions where it can, and falls
 back to real mouse and keyboard input when it must. Screenshots stay correct for
 covered and DPI-scaled windows. The Node server adds the tool surface, approvals, stable
 element numbers, diffs and Jev.
@@ -420,7 +438,9 @@ element numbers, diffs and Jev.
 | `user_active` | You kept typing or clicking for several seconds; open-cu waits for you first, then the agent retries. |
 | `target_ambiguous` | Several elements matched. The reply lists them; ask for one by number or describe it more precisely. |
 | `Jev targeting unavailable` | Run `open-cu jev status`; `open-cu jev setup` adds or replaces the key. |
-| `unsupported_platform` | open-cu runs on Windows only for now. |
+| `unsupported_platform` | open-cu supports Windows 10/11 and macOS 14+. Linux has no helper yet. |
+| `accessibility_permission` / `screen_recording_permission` | Enable the named permission for the host app in macOS Privacy & Security, then restart the MCP session. |
+| `input_guard_unavailable` | Enable Accessibility and, if needed, Input Monitoring for the host app; actions require a working Esc guard. |
 | Your antivirus flags `ocu-win.exe` | It is unsigned and watches for your Esc key to stop the agent. Rebuild it from source with `npm run build:native` if you prefer. |
 
 `open-cu doctor` shows the helper, input guard, approvals, Jev and whether your client
@@ -456,8 +476,8 @@ Also verified:
 - Live runs in Calculator, Windows 11 Notepad and Chrome.
 
 The Codex desktop **Plugins** panel and Claude Desktop's plugin browser have not been
-clicked through yet. macOS and Linux have no helper yet: the server starts there but
-reports that it only supports Windows. The full evidence and gaps are in
+clicked through yet. macOS support includes a universal helper and an isolated AppKit
+fixture suite. Linux still has no helper. The full evidence and gaps are in
 [docs/compatibility.md](docs/compatibility.md).
 
 The package follows [Agent Plugins 1.0](https://agent-plugins.org/specification), with
@@ -469,7 +489,8 @@ published to npm.
 <details>
 <summary>Build, test and contribute from a checkout</summary>
 
-You need Node.js 22.18+ and, for the helper, a Rust toolchain.
+You need Node.js 22.18+ and, for the helper, a Rust toolchain on Windows or Xcode
+Command Line Tools on macOS.
 
 ```sh
 git clone https://github.com/ossianravn/open-computer-use.git
@@ -484,9 +505,9 @@ npm run validate
 
 | Command | Purpose |
 |---|---|
-| `npm run build:all` | Build the Rust helper and the bundled CLI. Both are committed, so installs need no build. |
+| `npm run build:all` | Build the host native helper and bundled CLI. The macOS build is universal. Artifacts are committed, so installs need no build. |
 | `npm test` | Unit tests; no desktop needed. |
-| `npm run test:e2e` | Drives a WinForms test window through a real MCP client. Set `OCU_E2E_JEV=1` to include Jev. |
+| `npm run test:e2e` | Drives the host fixture (WinForms or AppKit) through a real MCP client. Set `OCU_E2E_JEV=1` to include Jev. |
 | `npm run validate` | Manifest, version, skill and artifact consistency. |
 | `node scripts/check-installed.mjs <cli.mjs>` | Connect to an installed copy over MCP. |
 | `node src/cli.ts <command>` | Run from source without building. |

@@ -7248,6 +7248,29 @@ var ALIASES = {
   "fl studio": "fl64.exe",
   "docker desktop": "docker desktop.exe"
 };
+var MACOS_ALIASES = {
+  chrome: "Google Chrome",
+  "google chrome": "Google Chrome",
+  edge: "Microsoft Edge",
+  "microsoft edge": "Microsoft Edge",
+  firefox: "firefox",
+  brave: "Brave Browser",
+  safari: "Safari",
+  finder: "Finder",
+  textedit: "TextEdit",
+  word: "Microsoft Word",
+  excel: "Microsoft Excel",
+  powerpoint: "Microsoft PowerPoint",
+  outlook: "Microsoft Outlook",
+  teams: "MSTeams",
+  code: "Code",
+  vscode: "Code",
+  "vs code": "Code",
+  "visual studio code": "Code",
+  settings: "System Settings",
+  calculator: "Calculator",
+  "docker desktop": "Docker Desktop"
+};
 function stripExe(name) {
   return name.toLowerCase().replace(/\.exe$/, "");
 }
@@ -7267,6 +7290,8 @@ function matchScore(window, query) {
   if (/^\d+$/.test(q) && window.pid === Number(q)) return 100;
   const alias = ALIASES[q];
   if (alias && process3 === alias) return 100;
+  if (MACOS_ALIASES[q]?.toLowerCase() === process3) return 100;
+  if (window.bundleId?.toLowerCase() === q) return 100;
   if (process3 === q || stripExe(process3) === stripExe(q)) return 100;
   if (window.exePath && window.exePath.toLowerCase() === q) return 100;
   if (title === q) return 90;
@@ -7313,8 +7338,8 @@ function displayName(window) {
   if (alias) return alias.replace(new RegExp("\\b\\p{L}", "gu"), (letter) => letter.toUpperCase());
   return window.processName.replace(/\.exe$/i, "") || `pid ${window.pid}`;
 }
-function aliasExe(name) {
-  return ALIASES[name.trim().toLowerCase()];
+function aliasExe(name, platform = "windows") {
+  return (platform === "macos" ? MACOS_ALIASES : ALIASES)[name.trim().toLowerCase()];
 }
 
 // src/computer.ts
@@ -8755,6 +8780,39 @@ var LAUNCH_DENIED = [
   "node.exe"
 ];
 var AGENT_APPS = ["claude.exe", "chatgpt.exe", "codex.exe"];
+var MACOS_TERMINALS = ["terminal", "iterm2", "iterm", "warp", "ghostty", "alacritty", "kitty", "wezterm", "wezterm-gui", "hyper", "tabby", "rio"];
+var MACOS_PASSWORD_MANAGERS = ["passwords", "1password", "1password 7", "bitwarden", "keepassxc", "lastpass", "dashlane", "nordpass", "proton pass", "protonpass", "enpass", "keeper", "roboform", "keychain access"];
+var MACOS_SYSTEM_APPS = ["system settings", "system preferences", "securityagent", "securityhost", "authorizationhost", "coreautha", "loginwindow", "activity monitor", "disk utility", "directory utility", "migration assistant", "installer", "software update", "malwarebytes", "sophos", "sentinelone", "falcon"];
+var MACOS_BLOCKED_BUNDLES = [
+  "com.apple.terminal",
+  "com.googlecode.iterm2",
+  "dev.warp.warp-stable",
+  "com.mitchellh.ghostty",
+  "net.kovidgoyal.kitty",
+  "org.alacritty",
+  "com.github.wez.wezterm",
+  "com.apple.passwords",
+  "com.apple.keychainaccess",
+  "com.1password.1password",
+  "com.agilebits.onepassword7",
+  "com.bitwarden.desktop",
+  "org.keepassxc.keepassxc",
+  "com.apple.systempreferences",
+  "com.apple.securityagent",
+  "com.apple.securityhost",
+  "com.apple.authorizationhost",
+  "com.apple.coreautha",
+  "com.apple.loginwindow",
+  "com.apple.activitymonitor",
+  "com.apple.diskutility",
+  "com.apple.installer",
+  "com.apple.directoryutility"
+];
+var MACOS_AGENT_BUNDLES = ["com.anthropic.claudefordesktop", "com.openai.chat", "com.openai.codex"];
+var MACOS_LAUNCH_DENIED = ["sh", "bash", "zsh", "fish", "osascript", "script editor", "automator", "shortcuts", "python", "python3", "node", "ruby", "perl", "swift", "pwsh"];
+function isLaunchDenied(program, bundleId) {
+  return LAUNCH_DENIED.includes(program.toLowerCase()) || MACOS_LAUNCH_DENIED.includes(program.toLowerCase()) || ["com.apple.scripteditor2", "com.apple.automator", "com.apple.shortcuts"].includes(bundleId?.toLowerCase() ?? "");
+}
 function appIdentity(window) {
   const exe = (window.processName || `pid-${window.pid}`).toLowerCase();
   return { exe, label: window.processName.replace(/\.exe$/i, "") || window.title };
@@ -8762,16 +8820,17 @@ function appIdentity(window) {
 function blockReason(window, config2) {
   const exe = window.processName.toLowerCase();
   const className = window.className.toLowerCase();
+  const bundleId = window.bundleId?.toLowerCase() ?? "";
   const refuse = (why) => ({
     code: "app_blocked",
     message: `open-cu is not allowed to use ${window.processName || window.title} (${why}). Ask the user to do this step themselves.`
   });
-  if (TERMINAL_PROCESSES.includes(exe) || TERMINAL_WINDOW_CLASSES.includes(className)) {
+  if (TERMINAL_PROCESSES.includes(exe) || MACOS_TERMINALS.includes(exe) || TERMINAL_WINDOW_CLASSES.includes(className)) {
     return refuse("terminals are never driven; use your own shell tool, where the user's permissions apply");
   }
-  if (PASSWORD_MANAGERS.includes(exe)) return refuse("password managers are off limits");
-  if (SECURITY_AND_SYSTEM.includes(exe)) return refuse("security, sign-in and system administration tools are off limits");
-  if (!config2.allowAgentApps && AGENT_APPS.includes(exe)) return refuse("AI agent apps are off limits");
+  if (PASSWORD_MANAGERS.includes(exe) || MACOS_PASSWORD_MANAGERS.includes(exe)) return refuse("password managers are off limits");
+  if (SECURITY_AND_SYSTEM.includes(exe) || MACOS_SYSTEM_APPS.includes(exe) || MACOS_BLOCKED_BUNDLES.includes(bundleId)) return refuse("protected macOS or Windows apps are off limits");
+  if (!config2.allowAgentApps && (AGENT_APPS.includes(exe) || ["claude", "chatgpt", "codex", "orca"].includes(exe) || MACOS_AGENT_BUNDLES.includes(bundleId))) return refuse("AI agent apps are off limits");
   if (config2.blockedApps.some((name) => name.toLowerCase() === exe)) return refuse("blocked in the user's config");
   return void 0;
 }
@@ -8779,8 +8838,18 @@ function assertNotBlocked(window, config2) {
   const reason = blockReason(window, config2);
   if (reason) throw new ToolError(reason.code, reason.message);
 }
-function assertKeyAllowed(key) {
+function assertKeyAllowed(key, platform = "windows") {
   const parts = key.toLowerCase().split("+").map((part) => part.trim());
+  if (platform === "macos") {
+    const command = parts.some((part) => ["cmd", "command", "meta", "super", "super_l", "super_r"].includes(part));
+    const control = parts.some((part) => ["ctrl", "control", "control_l", "control_r"].includes(part));
+    const option = parts.some((part) => ["alt", "option", "alt_l", "alt_r"].includes(part));
+    const last = parts.at(-1);
+    if (command && ["space", "tab", "grave"].includes(last ?? "") || command && option && ["escape", "esc"].includes(last ?? "") || command && control && last === "q" || control && ["up", "down", "left", "right", "f2", "f3", "f8"].includes(last ?? "")) {
+      throw new ToolError("key_blocked", "This shortcut controls the macOS shell instead of the target app.");
+    }
+    return;
+  }
   if (parts.some((part) => ["super", "super_l", "super_r", "win", "windows", "meta"].includes(part))) {
     throw new ToolError(
       "key_blocked",
@@ -8958,6 +9027,9 @@ var Computer = class {
   }
   get helper() {
     return this.platform.helper;
+  }
+  get accessibilityName() {
+    return this.platform.name === "macos" ? "macOS Accessibility" : "UI Automation";
   }
   get identityMaps() {
     return this.identities;
@@ -9214,11 +9286,15 @@ Nothing was done. Retry with element_index, or a more specific target.`
     if (/[\\/:]/.test(name)) throw new ToolError("bad_params", "Launch apps by name (as listed by list_apps with include_installed), not by path.");
     const installed = await this.platform.installedApps();
     const lower = name.toLowerCase();
-    const matches = installed.filter((app2) => app2.name.toLowerCase() === lower || app2.id.toLowerCase() === lower);
+    const alias = aliasExe(name, this.platform.name)?.toLowerCase();
+    const matches = installed.filter((app2) => app2.name.toLowerCase() === lower || app2.id.toLowerCase() === lower || app2.bundleId?.toLowerCase() === lower || alias && app2.processName?.toLowerCase() === alias);
     const compact = lower.replace(/\s+/g, "");
     const byId = (app2) => (app2.id.split("!")[0] ?? "").toLowerCase().split(/[._]/).some((part) => part === compact || part === `windows${compact}`);
     const loose = matches.length ? matches : installed.filter((app2) => app2.name.toLowerCase().includes(lower)).concat(installed.filter((app2) => !app2.name.toLowerCase().includes(lower) && byId(app2)));
-    const program = aliasExe(name) ?? (/\.exe$/i.test(name) ? name : `${name}.exe`);
+    if (loose.length > 1 && !matches.length) {
+      throw new ToolError("app_ambiguous", `Several installed apps match "${name}": ${loose.slice(0, 8).map((app2) => app2.name).join(", ")}. Use the exact name.`);
+    }
+    const program = loose[0]?.processName ?? aliasExe(name, this.platform.name) ?? (this.platform.name === "macos" || /\.exe$/i.test(name) ? name : `${name}.exe`);
     const fake = {
       hwnd: 0,
       title: name,
@@ -9226,6 +9302,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
       pid: 0,
       processName: program,
       exePath: null,
+      bundleId: loose[0]?.bundleId,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       minimized: false,
       maximized: false,
@@ -9236,17 +9313,14 @@ Nothing was done. Retry with element_index, or a more specific target.`
       dpi: 96
     };
     assertNotBlocked(fake, this.config);
-    if (LAUNCH_DENIED.includes(program.toLowerCase())) {
+    if (isLaunchDenied(program, loose[0]?.bundleId)) {
       throw new ToolError("app_blocked", `launch_app does not start shells or script hosts (${program}). Use your own shell tool.`);
     }
     const before = new Set((await this.helper.call("listWindows", { includeAll: true })).map((w) => w.hwnd));
-    if (loose.length === 1 || matches.length) await this.platform.launch(loose[0]);
-    else if (loose.length > 1) {
-      throw new ToolError("app_ambiguous", `Several installed apps match "${name}": ${loose.slice(0, 8).map((app2) => app2.name).join(", ")}. Use the exact name.`);
-    } else await this.platform.launch({ program: name });
+    const launched = await this.platform.launch(loose[0] ?? { program: name });
     for (let waited = 0; waited < 15e3; waited += 250) {
       await sleep2(250);
-      const fresh = (await this.helper.call("listWindows", {})).filter((w) => !before.has(w.hwnd));
+      const fresh = (await this.helper.call("listWindows", {})).filter((w) => launched ? w.pid === launched.pid : !before.has(w.hwnd));
       const window = fresh.find((w) => blockReason(w, this.config) === void 0) ?? fresh[0];
       if (window) {
         assertNotBlocked(window, this.config);
@@ -9255,7 +9329,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
         };
       }
     }
-    return { text: `Asked Windows to start ${loose[0]?.name ?? name}, but no new window appeared within 15 s. It may already be running; call list_apps.` };
+    return { text: `Asked ${this.platform.name === "macos" ? "macOS" : "Windows"} to start ${loose[0]?.name ?? name}, but no new window appeared within 15 s. It may already be running; call list_apps.` };
   }
   async getAppState(args) {
     const { state, resolved } = await this.open(args);
@@ -9323,7 +9397,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
       if (action) {
         const result = await this.elementCall(state, node2, action);
         return {
-          how: `via UI Automation (${action})${result.pending ? "; the app is still handling it (it may have opened a modal dialog)" : ""}`,
+          how: `via ${this.accessibilityName} (${action})${result.pending ? "; the app is still handling it (it may have opened a modal dialog)" : ""}`,
           pending: !!result.pending
         };
       }
@@ -9374,7 +9448,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
       summary.push(await this.chooseOption(state, node2, args.value));
     } else if (node2.focusable) {
       await this.elementCall(state, node2, "focus");
-      await this.input("pressKey", { key: "ctrl+a", hwnd: state.hwnd });
+      await this.input("pressKey", { key: this.platform.name === "macos" ? "cmd+a" : "ctrl+a", hwnd: state.hwnd });
       await this.input("typeText", { text: args.value, hwnd: state.hwnd });
       summary.push(`Element ${node2.index} has no settable value; focused it, selected all and typed the value instead.`);
     } else {
@@ -9425,7 +9499,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
     return this.outcome(state, before, beforeWindows, summary, args);
   }
   async pressKey(args) {
-    assertKeyAllowed(args.key);
+    assertKeyAllowed(args.key, this.platform.name);
     const { state, before, beforeWindows, note } = await this.begin(args);
     await this.input("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
     const summary = [...note ? [note] : [], `Pressed ${args.key}${(args.repeat ?? 1) > 1 ? ` \xD7${args.repeat}` : ""}.`];
@@ -9459,7 +9533,7 @@ Nothing was done. Retry with element_index, or a more specific target.`
           page: whole,
           amount: whole ? pages : Math.max(1, Math.round(pages * 4))
         });
-        summary.push(`Scrolled ${container.index} ${clean(container.name) || container.role} ${args.direction} by ${pages} page(s) via UI Automation.`);
+        summary.push(`Scrolled ${container.index} ${clean(container.name) || container.role} ${args.direction} by ${pages} page(s) via ${this.accessibilityName}.`);
       } else {
         await wheel(await this.centerOf(state, node2));
         summary.push(`Scrolled ${args.direction} with the mouse wheel over ${node2.index}.`);
@@ -9587,7 +9661,11 @@ ${result.text ?? ""}` };
     const lines = [];
     const ping = await this.helper.call("ping", {});
     const built = this.platform.helperPath ? new Date(statSync(this.platform.helperPath).mtimeMs).toISOString().replace("T", " ").slice(0, 19) : "n/a";
-    lines.push(`Helper: ocu-win ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
+    lines.push(`Helper: ${ping.platform === "macos" ? "ocu-mac" : "ocu-win"} ${ping.version} (${ping.platform}) at ${this.platform.helperPath}, built ${built} UTC`);
+    if (ping.permissions) {
+      lines.push(`macOS permissions: Accessibility ${ping.permissions.accessibility ? "granted" : "missing"}; Screen Recording ${ping.permissions.screenRecording ? "granted" : "missing"}; Input Monitoring ${ping.permissions.inputMonitoring ? "granted" : "missing"}.`);
+      if (!ping.permissions.accessibility || !ping.permissions.screenRecording) lines.push("Enable missing permissions for the app running open-cu in System Settings > Privacy & Security, then restart the MCP session.");
+    }
     const guard = await this.helper.call("guardStatus", {});
     lines.push(`Input guard: ${guard.enabled ? "on (physical Esc stops actions; user activity pauses input)" : "off"}`);
     lines.push(
@@ -9596,7 +9674,7 @@ ${result.text ?? ""}` };
     lines.push(`Approval mode: ${this.config.approval}; approved apps: ${this.config.approvedApps.join(", ") || "none"}`);
     const status = this.jev?.status();
     lines.push(`Jev: ${status ? status.ready ? `ready (model ${status.model})` : status.reason : "off"}`);
-    const windows = await this.helper.call("listWindows", {});
+    const windows = ping.permissions?.accessibility === false ? [] : await this.helper.call("listWindows", {});
     lines.push(`Visible app windows: ${windows.length}`);
     try {
       const last = JSON.parse(readFileSync3(LAST_CLIENT_FILE, "utf8"));
@@ -9614,6 +9692,7 @@ ${result.text ?? ""}` };
 import { execFile, spawn as spawn2 } from "node:child_process";
 import { existsSync as existsSync2, statSync as statSync2 } from "node:fs";
 import { dirname as dirname2, join as join2 } from "node:path";
+import { release } from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -9746,6 +9825,37 @@ var WindowsPlatform = class {
     this.helper.close();
   }
 };
+function macosHelperPath() {
+  if (process.platform === "darwin" && Number.parseInt(release(), 10) < 23) {
+    throw new ToolError("unsupported_platform", "The macOS helper requires macOS 14 (Sonoma) or later. Upgrade macOS to use open-cu on this computer.");
+  }
+  const path = process.env.OCU_MACOS_HELPER ?? join2(packageRoot(), "native", "macos", "bin", "ocu-mac");
+  if (!existsSync2(path)) {
+    throw new ToolError("helper_missing", `The macOS helper (ocu-mac) is missing. Run \`npm run build:native\` in ${packageRoot()} with Xcode Command Line Tools installed, or set OCU_MACOS_HELPER.`);
+  }
+  return path;
+}
+var MacOSPlatform = class {
+  name = "macos";
+  helperPath = macosHelperPath();
+  helper = new HelperClient(this.helperPath);
+  installed;
+  async installedApps() {
+    if (this.installed && Date.now() - this.installed.at < 5 * 6e4) return this.installed.apps;
+    const apps = await this.helper.call("installedApps", {});
+    this.installed = { at: Date.now(), apps };
+    return apps;
+  }
+  async launch(app2) {
+    if (!("id" in app2)) {
+      throw new ToolError("app_not_found", `No installed macOS app matches "${app2.program}". Use list_apps with include_installed=true and choose an exact app name.`);
+    }
+    return await this.helper.call("launchApp", { id: app2.id });
+  }
+  close() {
+    this.helper.close();
+  }
+};
 var UnavailablePlatform = class {
   helperPath = "";
   helper;
@@ -9764,19 +9874,19 @@ var UnavailablePlatform = class {
   }
 };
 function createPlatform() {
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32" && process.platform !== "darwin") {
     return new UnavailablePlatform(
       process.platform,
       new ToolError(
         "unsupported_platform",
-        `open-cu runs on Windows 10/11 only so far; there is no helper for ${process.platform} yet. Tell the user this tool cannot operate apps on this computer.`
+        `open-cu supports Windows 10/11 and macOS 14+; there is no helper for ${process.platform} yet. Tell the user this tool cannot operate apps on this computer.`
       )
     );
   }
   try {
-    return new WindowsPlatform();
+    return process.platform === "darwin" ? new MacOSPlatform() : new WindowsPlatform();
   } catch (error62) {
-    if (error62 instanceof ToolError) return new UnavailablePlatform("windows", error62);
+    if (error62 instanceof ToolError) return new UnavailablePlatform(process.platform === "darwin" ? "macos" : "windows", error62);
     throw error62;
   }
 }
@@ -39271,7 +39381,7 @@ function createServer(config2) {
   );
   tool(
     "click",
-    "Click an element (by element_index or target) or a point in the latest screenshot (x, y). Element clicks use UI Automation (invoke, toggle, select, expand) when the element supports it, else a real mouse click.",
+    "Click an element (by element_index or target) or a point in the latest screenshot (x, y). Element clicks use native accessibility (invoke, toggle, select, expand) when the element supports it, else a real mouse click.",
     {
       app,
       window: windowId,
@@ -39305,7 +39415,7 @@ function createServer(config2) {
   );
   tool(
     "press_key",
-    'Press a key or chord in xdotool syntax: "Return", "Escape", "Tab", "ctrl+s", "ctrl+shift+Tab", "Page_Down", "F5". Windows-key chords are blocked.',
+    'Press a key or chord in xdotool syntax: "Return", "Escape", "Tab", "ctrl+s", "cmd+s", "Page_Down", "F5". Use cmd on macOS, ctrl on Windows. Shortcuts that reach the OS shell are blocked.',
     {
       app,
       window: windowId,

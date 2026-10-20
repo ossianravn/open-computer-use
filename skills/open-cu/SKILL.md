@@ -47,7 +47,7 @@ see every action and can stop you with Esc.
 - **Dialogs** show up as `New window: <id> "<title>"`. Pass `window=<id>` to work in one.
   If a modal dialog blocks the main window, the tools switch to the dialog and say so.
 - **Keys** use xdotool names: `Return`, `Escape`, `Tab`, `ctrl+s`, `ctrl+shift+Tab`,
-  `Page_Down`, `F5`. On Windows, use `ctrl` where macOS uses `cmd`.
+  `Page_Down`, `F5`. On Windows, use `ctrl`; on macOS, use `cmd` (for example `cmd+s` or `cmd+a`). OS-level shortcuts such as Spotlight, app switching and Force Quit are blocked.
 
 ## Safety rules
 
@@ -66,3 +66,11 @@ see every action and can stop you with Esc.
   yourself, and do not switch to another tool to get around it.
 - When you finish, leave the apps as the user would expect: close dialogs you opened,
   and don't leave half-filled forms unless asked.
+
+## macOS permissions
+
+macOS 14+ requires Accessibility access for the app running open-cu. Screenshots also
+require Screen Recording. If the Esc guard is unavailable, Input Monitoring may be
+needed. `open-cu doctor` reports these separately. Ask the user to enable missing
+permissions in System Settings > Privacy & Security and restart the session. Never
+operate System Settings or try to grant permissions yourself.

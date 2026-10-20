@@ -34,6 +34,14 @@ const ALIASES: Record<string, string> = {
   "docker desktop": "docker desktop.exe",
 };
 
+const MACOS_ALIASES: Record<string, string> = {
+  chrome: "Google Chrome", "google chrome": "Google Chrome", edge: "Microsoft Edge", "microsoft edge": "Microsoft Edge",
+  firefox: "firefox", brave: "Brave Browser", safari: "Safari", finder: "Finder", textedit: "TextEdit",
+  word: "Microsoft Word", excel: "Microsoft Excel", powerpoint: "Microsoft PowerPoint", outlook: "Microsoft Outlook",
+  teams: "MSTeams", code: "Code", vscode: "Code", "vs code": "Code", "visual studio code": "Code",
+  settings: "System Settings", calculator: "Calculator", "docker desktop": "Docker Desktop",
+};
+
 function stripExe(name: string): string {
   return name.toLowerCase().replace(/\.exe$/, "");
 }
@@ -56,6 +64,8 @@ export function matchScore(window: WindowInfo, query: string): number {
   if (/^\d+$/.test(q) && window.pid === Number(q)) return 100;
   const alias = ALIASES[q];
   if (alias && process === alias) return 100;
+  if (MACOS_ALIASES[q]?.toLowerCase() === process) return 100;
+  if (window.bundleId?.toLowerCase() === q) return 100;
   if (process === q || stripExe(process) === stripExe(q)) return 100;
   if (window.exePath && window.exePath.toLowerCase() === q) return 100;
   if (title === q) return 90;
@@ -116,6 +126,6 @@ export function displayName(window: WindowInfo): string {
   return window.processName.replace(/\.exe$/i, "") || `pid ${window.pid}`;
 }
 
-export function aliasExe(name: string): string | undefined {
-  return ALIASES[name.trim().toLowerCase()];
+export function aliasExe(name: string, platform = "windows"): string | undefined {
+  return (platform === "macos" ? MACOS_ALIASES : ALIASES)[name.trim().toLowerCase()];
 }
