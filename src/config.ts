@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 /**
- * How apps get approved. Hard blocks (terminals, password managers, …) apply in every mode.
+ * How apps get approved. Only apps the user lists in blockedApps are refused, in every mode.
  * - all (default): every app is approved, so the agent is never stopped by a prompt.
  * - prompt: ask the user the first time an app is used (MCP elicitation); else the allowlist.
  * - allowlist: only apps in approvedApps.
@@ -38,10 +38,8 @@ export type Config = {
   approval: ApprovalMode;
   /** Executable names (e.g. "notepad.exe") the user approved permanently. */
   approvedApps: string[];
-  /** Extra executable names to refuse, on top of the built-in blocks. */
+  /** Executable names to refuse. Empty by default: nothing is blocked unless the user lists it. */
   blockedApps: string[];
-  /** Allow driving AI agent host apps (Claude, ChatGPT, Codex). Off by default. */
-  allowAgentApps: boolean;
   screenshots: ScreenshotMode;
   /** Longest edge of returned screenshots in pixels. */
   screenshotMaxEdge: number;
@@ -60,7 +58,6 @@ export const DEFAULT_CONFIG: Config = {
   approval: "all",
   approvedApps: [],
   blockedApps: [],
-  allowAgentApps: false,
   screenshots: "auto",
   screenshotMaxEdge: 1366,
   maxStateLines: 600,

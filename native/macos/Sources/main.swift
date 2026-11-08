@@ -18,7 +18,7 @@ func dispatch(_ method: String, _ p: Object) throws -> Any {
   switch method {
   case "ping":
     return [
-      "version": "0.2.1", "platform": "macos",
+      "version": "0.2.2", "platform": "macos",
       "permissions": [
         "accessibility": AXIsProcessTrusted(), "screenRecording": CGPreflightScreenCaptureAccess(),
         "inputMonitoring": CGPreflightListenEventAccess(),

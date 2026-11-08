@@ -67,8 +67,6 @@ test("macOS discovers app bundles and opens the fixture through launch_app", { s
   assert.ok(installed.some((app) => app.bundleId === "org.open-cu.fixture"));
   const launched = await ok("launch_app", { app: "org.open-cu.fixture" });
   assert.ok(launched.text.includes(String(hwnd)), launched.text);
-  const blocked = await call("launch_app", { app: "Terminal" });
-  assert.equal(blocked.isError, true); assert.match(blocked.text, /app_blocked/);
 });
 
 test("macOS AX actions, setValue, batches, and stable indices", { skip: !macos }, async () => {
@@ -95,8 +93,6 @@ test("macOS Unicode typing and Command shortcuts stay in the fixture", { skip: !
   await ok("press_key", { key: "cmd+a" });
   await ok("type_text", { text: "Replaced" });
   assert.match((await ok("get_app_state")).text, /Notes, Value: Replaced/);
-  const denied = await call("press_key", { key: "cmd+space" });
-  assert.equal(denied.isError, true); assert.match(denied.text, /key_blocked/);
   assert.equal((await helper.call("guardStatus", {})).stopped, false);
 });
 

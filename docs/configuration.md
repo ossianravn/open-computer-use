@@ -23,7 +23,6 @@ common ones for you:
   "approval": "all",
   "approvedApps": [],
   "blockedApps": [],
-  "allowAgentApps": false,
   "screenshots": "auto",
   "screenshotMaxEdge": 1366,
   "maxStateLines": 600,
@@ -44,10 +43,9 @@ common ones for you:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `approval` | `all` | `all`: every app, so the agent is never stopped by a prompt. `prompt`: ask the first time each app is used (or report how to approve it when the client cannot ask). `allowlist`: only `approvedApps`. Hard blocks apply in every mode. |
+| `approval` | `all` | `all`: every app, so the agent is never stopped by a prompt. `prompt`: ask the first time each app is used (or report how to approve it when the client cannot ask). `allowlist`: only `approvedApps`. Apps in `blockedApps` are refused in every mode. |
 | `approvedApps` | `[]` | Executable names approved permanently (used by `prompt` and `allowlist`). |
-| `blockedApps` | `[]` | Extra executables to refuse, on top of the built-in blocks. |
-| `allowAgentApps` | `false` | Allow driving AI agent apps (Claude, ChatGPT, Codex). |
+| `blockedApps` | `[]` | Executables or macOS bundle ids to refuse (e.g. `"keepassxc.exe"`, `"com.apple.Passwords"`). Nothing is blocked unless it is listed here. |
 | `screenshots` | `auto` | When `get_app_state` attaches a screenshot: `auto` (only when the tree is sparse), `always` or `never`. |
 | `screenshotMaxEdge` | `1366` | Longest edge of returned screenshots, in pixels. |
 | `maxStateLines` | `600` | Most lines in one rendered state; longer views end with an explicit marker. |

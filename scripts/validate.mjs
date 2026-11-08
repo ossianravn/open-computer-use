@@ -84,9 +84,16 @@ const committedTogether = (path, sourceDir) => {
 };
 artifact("dist/cli.mjs", "src", /\.ts$/, "npm run build:js");
 artifact("native/windows/bin/ocu-win.exe", "native/windows/src", /\.rs$/, "npm run build:native");
+// OCU_MAC_REBUILD_PENDING=1 lets a non-Mac host commit Swift source changes; the stale
+// binary is reported, and the next validate on a Mac fails until it is rebuilt.
+const macPending = process.platform !== "darwin" && process.env.OCU_MAC_REBUILD_PENDING === "1";
+const before = problems.length;
 artifact("native/macos/bin/ocu-mac", "native/macos/Sources", /\.swift$/, "npm run build:native on macOS");
 const macVersion = read("native/macos/Sources/main.swift").match(/"version": "([^"]+)"/)?.[1];
 if (macVersion !== pkg.version) problems.push(`macOS helper version ${macVersion} differs from package.json ${pkg.version}`);
+if (macPending && problems.length > before) {
+  for (const problem of problems.splice(before)) console.warn(`validate: pending macOS rebuild: ${problem}`);
+}
 
 if (problems.length) {
   console.error(`validate: ${problems.length} problem(s)\n- ${problems.join("\n- ")}`);

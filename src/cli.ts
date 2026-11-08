@@ -211,7 +211,7 @@ async function main(): Promise<void> {
       const meaning = {
         prompt: "ask the first time each app is used",
         allowlist: "only apps approved with `open-cu approve`",
-        all: "every app is approved; terminals, password managers and security tools stay blocked",
+        all: "every app is approved (only apps in blockedApps are refused)",
       }[mode];
       console.log(`Approval mode: ${mode} (${meaning}).`);
       return;

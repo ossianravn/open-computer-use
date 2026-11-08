@@ -8,7 +8,7 @@
  │ server.ts (MCP tools)         cli.ts (same tools, CLI)       │
  │                  └──────► computer.ts ◄──────┘               │
  │  apps.ts      resolve app/window → one window                │
- │  policy.ts    hard blocks, key rules, per-app approval       │
+ │  policy.ts    user block list, per-app approval              │
  │  state.ts     snapshot → stable element indices              │
  │  view.ts      tree → Codex-style lines, query, diff          │
  │  targets.ts   candidates + lexical scoring                   │
@@ -117,7 +117,7 @@ Every action follows the same steps:
 
 1. Resolve the window (`apps.ts`). A main window disabled by a modal dialog redirects
    to the dialog, with a note.
-2. Check the hard blocks, then approval.
+2. Check the user's `blockedApps`, then approval.
 3. Refresh the state if it is more than 1.5 s old.
 4. Pick the element: `element_index`, or `target` through the resolver, or screenshot
    coordinates mapped through the last capture (refused without a screenshot, or if the
@@ -185,10 +185,10 @@ in time.
 
 ## Policy (`policy.ts`)
 
-- **Hard blocks:** terminals (process names and console window classes), password
-  managers, security and system administration tools, sign-in and UAC prompts, and AI
-  agent apps unless `allowAgentApps` is set.
-- **Keys:** no Windows-key chords and no Ctrl+Alt+Delete.
+- **Blocks:** none built in. Only executables the user lists in `blockedApps` are
+  refused; `list_apps` shows them as `[blocked]` without their window titles.
+- **Keys and launching:** every key chord is allowed, and `launch_app` starts any
+  program, by installed name, program name or path.
 - **Approval:**
   - `all` (the default): every app is allowed, so agents are never stopped midway.
     `off` is an accepted older name.
@@ -222,8 +222,8 @@ adapter selects it on Darwin; `OCU_MACOS_HELPER` can point to a development buil
 - **Accessibility:** AX roles map to the existing wire roles, preserving the rendered
   text grammar. Native AX actions are preferred to mouse input. Each window retains
   its latest AX elements, with snapshot IDs checked before actions. AX element hashes
-  and process IDs provide identities across snapshots. Secure fields omit values and
-  reject read/write actions. Modal AXPress calls return `pending` while the worker
+  and process IDs provide identities across snapshots. Secure fields omit their values
+  (macOS hides them) but can be focused, set and typed into like any field. Modal AXPress calls return `pending` while the worker
   finishes; the input guard remains responsive on the main run loop.
 - **Coordinates and screenshots:** macOS AX and CGEvent use top-left global display
   points. ScreenCaptureKit captures the selected window independently of overlapping
@@ -239,7 +239,7 @@ adapter selects it on Darwin; `OCU_MACOS_HELPER` can point to a development buil
 - **Permissions:** `ping` reports Accessibility, Screen Recording and Input Monitoring
   preflight status. AX reads require Accessibility; captures require Screen Recording.
   Missing grants produce actionable errors. Neither the helper nor the MCP tools
-  can grant permissions. App policy checks both process names and macOS bundle IDs.
+  can grant permissions. `blockedApps` matches process names and macOS bundle IDs.
 - **Overlay:** nonactivating, click-through NSPanel strips outline the target display
   with a usage label. A main-thread timer hides it after inactivity; Esc hides it
   immediately. The helper's own windows never appear in app listings or captures.

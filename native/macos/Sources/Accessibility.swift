@@ -51,7 +51,7 @@ final class Accessibility {
     let names = actionNames(element)
     // AppKit pop-up buttons claim AXValue is settable but may ignore writes.
     // Expose their menu selection path instead, so set_value can verify the choice.
-    let valueSettable = !secure && axRole != "AXPopUpButton" && settable(element, "AXValue")
+    let valueSettable = axRole != "AXPopUpButton" && settable(element, "AXValue")
     let expanded = attribute(element, "AXExpanded") as? NSNumber
     var actions: [String] = []
     if names.contains("AXPress") {
@@ -95,10 +95,10 @@ final class Accessibility {
       "offscreen": boolAttribute(element, "AXHidden")
         || (windowRect.map { rect.width > 0 && rect.height > 0 && !$0.intersects(rect) } ?? false),
       "focused": boolAttribute(element, "AXFocused"),
-      "focusable": !secure && settable(element, "AXFocused"),
+      "focusable": settable(element, "AXFocused"),
       "actions": Array(Set(actions)).sorted(), "readOnly": !valueSettable,
       "helpText": secure
-        ? "Secure text field; contents and actions are unavailable."
+        ? "Secure text field; macOS hides its contents."
         : textAttribute(element, "AXHelp"),
     ]
     if role == "Hyperlink" { result["value"] = textAttribute(element, "AXURL") }
@@ -270,9 +270,6 @@ final class Accessibility {
     let (_, element) = try resolve(p)
     let action = try p.string("action")
     if action != "readText" { try guardState.check() }
-    guard textAttribute(element, "AXSubrole") != "AXSecureTextField" else {
-      throw RPCError("input_blocked", "Secure text fields cannot be read or changed.")
-    }
     if action == "readText" {
       let length = try p.integer("maxLength", default: 20_000, range: 0...1_000_000)
       return ["ok": true, "text": String(textAttribute(element, "AXValue").prefix(length))]

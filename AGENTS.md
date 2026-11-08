@@ -31,6 +31,8 @@ The repository is the plugin: GitHub installs in every client copy it as is.
   `native/windows/bin/ocu-win.exe`, and `native/macos/bin/ocu-mac` are committed. Rebuild
   whichever one your change affects, then run `npm run validate` before committing. It fails when an artifact is
   older than its sources or when versions disagree.
+  Swift changes made on Windows can be committed with `OCU_MAC_REBUILD_PENDING=1 npm run validate`,
+  which reports the stale `ocu-mac` instead of failing; rebuild it on a Mac before the next release.
 - **Manifests:**
   - portable `plugin.json` + `mcp.json` + `skills/` (Codex reads these);
   - `.claude-plugin/plugin.json` (inline MCP server) and `.claude-plugin/marketplace.json`;
@@ -76,7 +78,8 @@ properties), because Node runs the sources directly. Use `.ts` extensions in imp
 - **Changing the rendered text grammar** (`view.ts`) changes what agents read. Keep it
   Codex-compatible and update `tests/unit/view.test.ts`.
 - **Safety:**
-  - Hard blocks live in `src/policy.ts`, and no config can lift them.
+  - Nothing is blocked by default: the user chose full access. Do not add built-in
+    blocks or refusals; the only block list is the user's `blockedApps`.
   - Never add a tool that approves apps.
   - The helper's input guard stores timestamps only.
 - **Jev is optional.** Every path must work without a key, and a Jev failure falls back

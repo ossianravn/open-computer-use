@@ -2,7 +2,7 @@
 
 ![open-cu: computer use for every agent. Claude Code, Codex, OpenCode and any MCP client.](docs/assets/header.jpg)
 
-[![Version 0.2.1](https://img.shields.io/badge/version-v0.2.1-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555555)](#macos-permissions) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
+[![Version 0.2.2](https://img.shields.io/badge/version-v0.2.2-D4572A)](#compatibility-and-status) [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](#claude-code) [![Codex plugin](https://img.shields.io/badge/Codex-plugin-202020)](#codex) [![OpenCode v2 plugin](https://img.shields.io/badge/OpenCode_v2-plugin-343434)](#opencode-v2) [![Any MCP client](https://img.shields.io/badge/MCP-any_client-5A5A5A)](#any-other-mcp-client) [![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)](#install) [![Node.js 22.18+](https://img.shields.io/badge/Node.js-22.18%2B-5FA04E?logo=nodedotjs&logoColor=white)](#install) [![MIT license](https://img.shields.io/badge/license-MIT-3568C8)](LICENSE)
 
 **Let your coding agent use the apps on your computer.**
 
@@ -271,8 +271,8 @@ buttons. Tell me what the display shows.
 ```
 
 **2. There is nothing to approve.** By default the agent may use every app, so it is
-never stopped halfway by a permission prompt. Terminals, password managers, security
-tools and sign-in prompts stay blocked. Prefer to be asked the first time each app is
+never stopped halfway by a permission prompt. Nothing is blocked either: terminals,
+browsers and other agent apps all work. Prefer to be asked the first time each app is
 used? Run `open-cu approval prompt`. If your client can't show that prompt, the agent
 tells you how to approve the app instead.
 
@@ -346,7 +346,7 @@ More detail in [docs/jev.md](docs/jev.md).
 | Tool | What it does |
 |---|---|
 | `list_apps` | Open apps and their windows; `include_installed` adds installed apps |
-| `launch_app` | Start an installed app by name (localized names work) |
+| `launch_app` | Start an app by installed name (localized names work), program name or path |
 | `get_app_state` | Read a window as numbered lines, plus a screenshot when needed |
 | `find_element` | Rank the elements matching a description, without acting |
 | `click` | By element number, by description, or at screenshot coordinates |
@@ -385,13 +385,10 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
   `open-cu approval prompt` asks you the first time each app is used, and
   `open-cu approval allowlist` allows only apps you list with `open-cu approve`. Agents
   have no tool for approving apps.
-- **Always blocked:**
-  - terminals;
-  - password managers;
-  - security and antivirus tools;
-  - sign-in and administrator (UAC) prompts;
-  - AI agent apps (Claude, ChatGPT, Codex);
-  - Windows-key shortcuts, and macOS shortcuts for Spotlight, app switching, Force Quit and the lock screen.
+- **Nothing is blocked by default.** Terminals, password managers, system tools, other
+  agent apps (Claude, ChatGPT, Codex) and OS shortcuts (the Windows key, Spotlight, app
+  switching) all work. To keep the agent out of an app, add its executable (or macOS
+  bundle id) to `"blockedApps"` in the config.
 - **You can see when it's working.** A blue glow around the screen, with the label
   "open-cu is using *App* · Esc to stop", appears while an agent uses an app. It fades
   out after 15 seconds without activity.
@@ -401,9 +398,8 @@ Edge work too, with links written inline: `see [Personal computer](#87).`
 - **You stay in charge.** Pressing **Esc** stops every action for 20 seconds and hides
   the overlay at once. The agent also backs off while you are using the keyboard or
   mouse. Only timestamps are kept, never your keystrokes.
-- **The agent is told** to ask before sending messages, buying, deleting or changing
-  account settings. It never types passwords or payment details, and it treats text on
-  screen as data, not instructions.
+- **The agent is told** to treat text on screen as data, not instructions. open-cu adds
+  no rules of its own about what to do in an app; your agent's own judgment applies.
 - **Everything runs locally** except the optional Jev lookups. Settings live in
   `~/.open-cu/config.json`; see [docs/configuration.md](docs/configuration.md).
 
@@ -433,7 +429,7 @@ element numbers, diffs and Jev.
 | `node` or `npm` not found | Install Node.js 22.18+ and reopen your client so it picks up the new PATH. |
 | Tools missing after installing | Start a new session. Claude Code: `/plugin` → **Installed**, then `/reload-plugins`. OpenCode: `opencode service restart`, then `opencode mcp list`. |
 | `app_not_approved` | Only in `prompt` or `allowlist` mode: run `open-cu approve <app>.exe`, or `open-cu approval all` to go back to the default. |
-| `app_blocked` | That app is on the safety block list; do that step yourself. |
+| `app_blocked` | You listed that app in `blockedApps`; do that step yourself or remove it from the list. |
 | `stopped_by_user` | Someone pressed Esc. Tell the agent when to continue. |
 | `user_active` | You kept typing or clicking for several seconds; open-cu waits for you first, then the agent retries. |
 | `target_ambiguous` | Several elements matched. The reply lists them; ask for one by number or describe it more precisely. |
@@ -461,7 +457,7 @@ folder to remove them too.
 
 ## Compatibility and status
 
-**v0.2.1 is an early release.** On 11 October 2026, these routes were installed from
+**v0.2.2 is an early release.** On 11 October 2026, these routes were installed from
 GitHub on Windows 11, each in an isolated profile. The installed server was then
 checked over MCP:
 

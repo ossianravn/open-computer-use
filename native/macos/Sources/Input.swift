@@ -132,15 +132,6 @@ struct KeyChord {
         "bad_key",
         "Unknown key \(key). Use type_text for text and supported key names for shortcuts.")
     }
-    if (flags.contains(.maskCommand) && ["space", "tab", "grave"].contains(key))
-      || (flags.contains([.maskCommand, .maskAlternate]) && ["escape", "esc"].contains(key))
-      || (flags.contains([.maskCommand, .maskControl]) && key == "q")
-      || (flags.contains(.maskControl)
-        && ["up", "down", "left", "right", "f2", "f3", "f8"].contains(key))
-    {
-      throw RPCError(
-        "key_blocked", "This shortcut controls the macOS shell instead of the target app.")
-    }
     return KeyChord(code: code, flags: flags)
   }
 }
@@ -322,12 +313,6 @@ final class Input {
       throw RPCError("bad_params", "Type at most 100000 UTF-16 units per call.")
     }
     let window = try prepare(p)
-    if let window,
-      let focused = elementAttribute(windows.application(window.pid), "AXFocusedUIElement"),
-      textAttribute(focused, "AXSubrole") == "AXSecureTextField"
-    {
-      throw RPCError("input_blocked", "Typing into secure text fields is not allowed.")
-    }
     for character in text {
       try check(window)
       let units = Array(String(character).utf16)

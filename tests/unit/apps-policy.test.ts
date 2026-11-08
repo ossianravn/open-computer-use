@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, loadConfig, parseApprovalMode } from "../../src/config.ts";
 import { ToolError } from "../../src/errors.ts";
-import { Approvals, assertKeyAllowed, blockReason, isLaunchDenied } from "../../src/policy.ts";
+import { Approvals, blockReason } from "../../src/policy.ts";
 import { Computer } from "../../src/computer.ts";
 import { windowInfo } from "./helpers.ts";
 
@@ -42,21 +42,14 @@ test("an explicit window must belong to the named app", () => {
   assert.equal(resolveWindow([notepad, chrome], [notepad, chrome], undefined, 1).window.hwnd, 1);
 });
 
-test("terminals, password managers and agent apps are blocked", () => {
+test("nothing is blocked unless the user lists it in blockedApps", () => {
   const config = structuredClone(DEFAULT_CONFIG);
-  assert.ok(blockReason(windowInfo({ processName: "WindowsTerminal.exe" }), config));
-  assert.ok(blockReason(windowInfo({ processName: "pwsh.exe", className: "ConsoleWindowClass" }), config));
-  assert.ok(blockReason(windowInfo({ processName: "1Password.exe" }), config));
-  assert.ok(blockReason(windowInfo({ processName: "Claude.exe" }), config));
-  // A GUI window owned by a shell process is not a terminal.
-  assert.equal(blockReason(windowInfo({ processName: "pwsh.exe", className: "WindowsForms10.Window.8.app" }), config), undefined);
-  assert.equal(blockReason(notepad, config), undefined);
-});
-
-test("Windows-key chords are refused", () => {
-  assert.throws(() => assertKeyAllowed("super+r"), /Windows-key/);
-  assert.throws(() => assertKeyAllowed("ctrl+alt+delete"));
-  assert.doesNotThrow(() => assertKeyAllowed("ctrl+s"));
+  for (const processName of ["WindowsTerminal.exe", "1Password.exe", "Claude.exe", "regedit.exe", "notepad.exe"]) {
+    assert.equal(blockReason(windowInfo({ processName }), config), undefined, processName);
+  }
+  assert.equal(blockReason(windowInfo({ processName: "pwsh.exe", className: "ConsoleWindowClass" }), config), undefined);
+  const blocking = { ...config, blockedApps: ["Claude.exe"] };
+  assert.match(blockReason(windowInfo({ processName: "claude.exe" }), blocking)?.message ?? "", /blockedApps/);
 });
 
 test("macOS aliases and bundle identities resolve without Windows executable names", () => {
@@ -66,34 +59,22 @@ test("macOS aliases and bundle identities resolve without Windows executable nam
   assert.equal(matchScore(windowInfo({ processName: "Microsoft Word" }), "word"), 100);
 });
 
-test("macOS protected apps stay blocked by executable and bundle identity", () => {
-  for (const processName of ["Terminal", "iTerm2", "Warp", "Ghostty", "Passwords", "Keychain Access", "1Password", "System Settings", "SecurityAgent", "loginwindow", "Codex", "Claude", "ChatGPT"]) {
-    assert.ok(blockReason(windowInfo({ processName }), structuredClone(DEFAULT_CONFIG)), processName);
+test("macOS apps are not blocked unless listed, by name or bundle id", () => {
+  for (const processName of ["Terminal", "iTerm2", "Passwords", "Keychain Access", "System Settings", "Codex", "Claude", "ChatGPT"]) {
+    assert.equal(blockReason(windowInfo({ processName }), structuredClone(DEFAULT_CONFIG)), undefined, processName);
   }
-  for (const bundleId of ["com.apple.Terminal", "com.googlecode.iterm2", "com.apple.systempreferences", "com.apple.Passwords", "com.openai.codex"]) {
-    assert.ok(blockReason(windowInfo({ processName: "Renamed app", bundleId }), structuredClone(DEFAULT_CONFIG)), bundleId);
-  }
-  assert.equal(blockReason(windowInfo({ processName: "TextEdit", bundleId: "com.apple.TextEdit" }), DEFAULT_CONFIG), undefined);
-  assert.equal(blockReason(windowInfo({ processName: "Codex", bundleId: "com.openai.codex" }), { ...DEFAULT_CONFIG, allowAgentApps: true }), undefined);
+  const blocking = { ...structuredClone(DEFAULT_CONFIG), blockedApps: ["com.apple.Passwords"] };
+  assert.ok(blockReason(windowInfo({ processName: "Passwords", bundleId: "com.apple.Passwords" }), blocking));
 });
 
-test("macOS permits app Command shortcuts and blocks OS escape shortcuts", () => {
-  for (const key of ["cmd+s", "command+a", "meta+c", "cmd+shift+z", "ctrl+a", "Return"]) assert.doesNotThrow(() => assertKeyAllowed(key, "macos"), key);
-  for (const key of ["cmd+space", "command+Tab", "meta+grave", "cmd+option+Escape", "control+command+q", "ctrl+up", "control_l+F2"]) assert.throws(() => assertKeyAllowed(key, "macos"), /macOS shell/, key);
-  assert.throws(() => assertKeyAllowed("meta+s", "windows"), /Windows-key/);
-});
-
-test("macOS launch checks the resolved app identity before starting it", async () => {
-  const computer = new Computer({ config: structuredClone(DEFAULT_CONFIG), platform: {
+test("launch_app refuses only apps the user listed in blockedApps", async () => {
+  const computer = new Computer({ config: { ...structuredClone(DEFAULT_CONFIG), blockedApps: ["com.apple.terminal"] }, platform: {
     name: "macos", helperPath: "", close() {},
     helper: { close() {}, call: async () => { throw new Error("must not call helper"); } },
     installedApps: async () => [{ name: "My command console", id: "/Applications/Console.app", processName: "Renamed", bundleId: "com.apple.Terminal" }],
     launch: async () => { throw new Error("must not launch"); },
   } });
-  await assert.rejects(computer.launchApp({ app: "My command" }), /off limits/);
-  for (const name of ["zsh", "osascript", "Script Editor", "Automator", "Shortcuts"]) assert.equal(isLaunchDenied(name), true, name);
-  assert.equal(isLaunchDenied("Renamed", "com.apple.ScriptEditor2"), true);
-  assert.equal(isLaunchDenied("TextEdit", "com.apple.TextEdit"), false);
+  await assert.rejects(computer.launchApp({ app: "My command" }), /blockedApps/);
 });
 
 const prompting = () => ({ ...structuredClone(DEFAULT_CONFIG), approval: "prompt" as const });
@@ -144,14 +125,13 @@ test("approval changes on disk apply without a restart", async () => {
   await approvals.ensure(notepad);
 });
 
-test('approval mode "all" approves every app but not blocked ones', async () => {
+test('approval mode "all" approves every app', async () => {
   const config = { ...structuredClone(DEFAULT_CONFIG), approval: "all" as const };
   const approvals = new Approvals(config, async () => {
     throw new Error("should not ask");
   });
   await approvals.ensure(notepad);
   await approvals.ensure(chrome);
-  assert.ok(blockReason(windowInfo({ processName: "1Password.exe" }), config));
   assert.equal(parseApprovalMode("off"), "all");
   assert.equal(parseApprovalMode("ALL"), "all");
   assert.equal(parseApprovalMode("sometimes"), undefined);

@@ -7,7 +7,7 @@ import { type Config, LAST_CLIENT_FILE, loadConfig } from "./config.ts";
 import { ToolError, errorMessage } from "./errors.ts";
 import { type Jev, type Resolution, resolveTarget, verifyOutcome } from "./jev.ts";
 import type { Platform } from "./platform.ts";
-import { Approvals, type AskUser, appIdentity, assertKeyAllowed, assertNotBlocked, blockReason, isLaunchDenied } from "./policy.ts";
+import { Approvals, type AskUser, appIdentity, assertNotBlocked, blockReason } from "./policy.ts";
 import type { ElementActionResult, HelperMethods, WindowInfo } from "./protocol.ts";
 import { IdentityMap, type StateNode, WindowState } from "./state.ts";
 import { type Purpose, describeCandidate } from "./targets.ts";
@@ -156,11 +156,12 @@ export class Computer {
   private async refresh(state: WindowState, includeOffscreen = false): Promise<View> {
     let snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
     // Chromium (Chrome, Edge, Electron apps) builds its page tree only once an
-    // accessibility client asks; the first read shows browser chrome alone.
+    // accessibility client asks; the first read shows browser chrome alone. Electron
+    // apps (Claude, VS Code, Slack) can take more than 2 s to build it.
     if (state.snapshotId === 0 && snapshot.window.className.startsWith("Chrome_WidgetWin")) {
       const hasPage = (nodes: typeof snapshot.nodes) =>
         nodes.some((node) => node.role === "Document" && nodes.some((child) => child.parent === node.id));
-      for (let attempt = 0; attempt < 8 && !hasPage(snapshot.nodes); attempt++) {
+      for (let attempt = 0; attempt < 16 && !hasPage(snapshot.nodes); attempt++) {
         await sleep(250);
         snapshot = await this.helper.call("snapshot", { hwnd: state.hwnd, includeOffscreen });
       }
@@ -399,7 +400,7 @@ export class Computer {
       if (block) tags.push("blocked");
       else if (this.approvals.isApproved(identity)) tags.push("approved");
       if (block) {
-        // Window titles of blocked apps (password vaults, terminals) stay private.
+        // The user blocked this app; its window titles stay private.
         lines.push(`- ${displayName(first)} — ${identity.exe} [blocked]`);
         continue;
       }
@@ -420,8 +421,9 @@ export class Computer {
   async launchApp(args: { app: string }): Promise<ToolOutput> {
     const name = args.app.trim();
     if (!name) throw new ToolError("bad_params", "Pass the app name to launch.");
-    if (/[\\/:]/.test(name)) throw new ToolError("bad_params", "Launch apps by name (as listed by list_apps with include_installed), not by path.");
-    const installed = await this.platform.installedApps();
+    // A path (C:\Tools\app.exe) is started as is; a name is looked up among installed apps.
+    const isPath = /[\\/]/.test(name);
+    const installed = isPath ? [] : await this.platform.installedApps();
     const lower = name.toLowerCase();
     const alias = aliasExe(name, this.platform.name)?.toLowerCase();
     const matches = installed.filter((app) => app.name.toLowerCase() === lower || app.id.toLowerCase() === lower || app.bundleId?.toLowerCase() === lower || (alias && app.processName?.toLowerCase() === alias));
@@ -434,15 +436,13 @@ export class Computer {
     if (loose.length > 1 && !matches.length) {
       throw new ToolError("app_ambiguous", `Several installed apps match "${name}": ${loose.slice(0, 8).map((app) => app.name).join(", ")}. Use the exact name.`);
     }
-    const program = loose[0]?.processName ?? aliasExe(name, this.platform.name) ?? (this.platform.name === "macos" || /\.exe$/i.test(name) ? name : `${name}.exe`);
+    const base = name.split(/[\\/]/).pop() ?? name;
+    const program = loose[0]?.processName ?? aliasExe(base, this.platform.name) ?? (this.platform.name === "macos" || /\.exe$/i.test(base) ? base : `${base}.exe`);
     const fake: WindowInfo = {
       hwnd: 0, title: name, className: "", pid: 0, processName: program, exePath: null, bundleId: loose[0]?.bundleId,
       rect: { x: 0, y: 0, width: 0, height: 0 }, minimized: false, maximized: false, foreground: false, enabled: true, owner: null, appWindow: true, dpi: 96,
     };
     assertNotBlocked(fake, this.config);
-    if (isLaunchDenied(program, loose[0]?.bundleId)) {
-      throw new ToolError("app_blocked", `launch_app does not start shells or script hosts (${program}). Use your own shell tool.`);
-    }
     const before = new Set((await this.helper.call("listWindows", { includeAll: true })).map((w) => w.hwnd));
     const launched = await this.platform.launch(loose[0] ?? { program: name });
 
@@ -643,7 +643,6 @@ export class Computer {
   }
 
   async pressKey(args: PressKeyArgs): Promise<ToolOutput> {
-    assertKeyAllowed(args.key, this.platform.name);
     const { state, before, beforeWindows, note } = await this.begin(args);
     await this.input("pressKey", { key: args.key, hwnd: state.hwnd, repeat: args.repeat ?? 1 });
     const summary = [...(note ? [note] : []), `Pressed ${args.key}${(args.repeat ?? 1) > 1 ? ` ×${args.repeat}` : ""}.`];
